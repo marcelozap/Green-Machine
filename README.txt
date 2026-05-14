@@ -44,14 +44,32 @@ QUICK START (Windows PowerShell)
 
   Open http://127.0.0.1:5173 — use Ctrl+K to run a backtest.
 
+THINKORSWIM (SCHWAB) USERS
+---------------------------
+  Thinkorswim is a front-end; automated market pulls for third-party apps go through
+  Charles Schwab APIs (developer registration, OAuth). Green Machine does not embed
+  Schwab OAuth — use CSV exports from TOS for the fastest path.
+
+  Daily / chart style CSV (SPY or your underlying):
+    cd backend
+    .\.venv\Scripts\Activate.ps1
+    python scripts\import_tos_daily_csv.py "C:\path\YourExport.csv"
+
+  If headers are nonstandard, pass explicit columns, for example:
+    python scripts\import_tos_daily_csv.py export.csv --col-date Time --col-close LAST
+
+  Account / trade history CSV (fills with Exec Time, Side, Symbol, etc.) is useful for
+  journaling and tax — for chain backtests you still want OHLCV or full option marks.
+  Map fills into the Vault later if you add a trade-replay module.
+
 YOUR REAL OPTION DATA
 ---------------------
+  - Thinkorswim daily / chart CSV: scripts\import_tos_daily_csv.py (see section above).
   - Full chain history: use scripts\ingest_options.py against Postgres if you add it later.
   - Daily SPY + VIX for the Vault path: use scripts\ingest_spy_daily.py against Postgres,
-    or load your own CSV into SQLite tables spy_daily / market_states (same columns as seed).
+    or import_tos_daily_csv.py / seed_sqlite_demo.py into SQLite.
 
-  With only SQLite, bulk COPY helpers are not wired; use DB Browser for SQLite, or
-  extend a small importer script when you are ready.
+  With only SQLite, use import_tos_daily_csv.py or DB Browser for SQLite for custom loads.
 
 POSTGRES / TIMESCALE (optional, later)
 --------------------------------------
