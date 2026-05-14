@@ -1,0 +1,16 @@
+services:
+  db:
+    image: timescale/timescaledb:latest-pg16
+    container_name: green-machine-db
+    environment:
+      POSTGRES_USER: green
+      POSTGRES_PASSWORD: green
+      POSTGRES_DB: greenmachine
+    ports:
+      - "5432:5432"
+    volumes:
+      - green_machine_pgdata:/var/lib/postgresql/data
+      - ./sql:/docker-entrypoint-initdb.d:ro
+
+volumes:
+  green_machine_pgdata:
