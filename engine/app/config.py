@@ -31,5 +31,8 @@ class Settings(BaseSettings):
     llm_model: str = "gpt-4o-mini"
     anthropic_model: str = "claude-3-5-sonnet-20241022"
 
+    # Comma-separated browser origins (e.g. https://your-app.vercel.app) for CORS.
+    cors_origins: str = ""
+
 
 settings = Settings()

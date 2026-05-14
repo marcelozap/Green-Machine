@@ -13,7 +13,8 @@
 |--------|------------|
 | FastAPI app | `http://127.0.0.1:8000` (default `uvicorn app.main:app --port 8000`) |
 | OpenAPI docs | `http://127.0.0.1:8000/docs` |
-| React “Glass Cockpit” (Vite dev) | `http://127.0.0.1:5173` (proxies `/health`, `/backtest`, `/market` to port 8000) |
+| React “Glass Cockpit” (Vite dev) | `http://127.0.0.1:5173` (proxies `/health`, `/backtest`, `/market` to port 8000 when `VITE_ENGINE_URL` unset) |
+| Pilot on **Vercel** | Set **`VITE_ENGINE_URL`** to public **HTTPS** Engine base (tunnel); Engine must allow origin via **`GM_CORS_ORIGINS`** — see `docs/VERCEL_AND_ENGINE.txt`. |
 
 **There is no WebSocket live feed in the codebase yet.** Pilot uses HTTP + polling patterns only.
 

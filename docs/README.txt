@@ -6,4 +6,5 @@ Agent reading order (Green Machine)
 3. .cursorrules (repo root)    — Cursor agent defaults; keep in sync with STRATEGY where they overlap
 
 Financial ingestion code and SQL live under `historian/` (see `historian/README.txt`).  
-Bulk options chain → local SQLite: `historian/scripts/ingest_options_sqlite.py`.
+Bulk options chain → local SQLite: `historian/scripts/ingest_options_sqlite.py`.  
+**Vercel Pilot + PC Engine:** see `docs/VERCEL_AND_ENGINE.txt`.

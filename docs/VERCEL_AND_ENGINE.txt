@@ -1,0 +1,53 @@
+Vercel (Pilot) + PC (Engine) split
+===================================
+
+OVERVIEW
+--------
+  - **Vercel** hosts the static/Vite build from `pilot/` (Glass Cockpit).
+  - **Your PC** runs FastAPI from `engine/` with your data under `data/`.
+
+VERCEL PROJECT SETTINGS
+-----------------------
+  - **Root Directory:** `pilot` (if the Git repo is the monorepo root).
+  - **Build command:** `npm run build`
+  - **Output directory:** `dist`
+  - **Environment variable (Production + Preview):**
+        VITE_ENGINE_URL = <public HTTPS URL of your Engine>
+
+PILOT → ENGINE URL
+------------------
+  Set `VITE_ENGINE_URL` to the **browser-reachable** base of the API, e.g.:
+    https://abc123.ngrok-free.app
+  The Pilot calls `VITE_ENGINE_URL + "/health"`, `/market/snapshot`, `/backtest/llm`.
+
+  Leave `VITE_ENGINE_URL` **unset** for local `npm run dev` (Vite proxy → localhost:8000).
+
+HTTPS / MIXED CONTENT
+---------------------
+  Vercel serves the Pilot over **HTTPS**. Browsers **block** `fetch()` from HTTPS pages to plain **http://** APIs.
+  So your PC Engine must be exposed with **HTTPS** (ngrok, Cloudflare Tunnel, stunnel, or a small VPS reverse proxy).
+
+PC — RUN ENGINE SO THE INTERNET CAN REACH IT
+--------------------------------------------
+  Bind all interfaces (not only localhost):
+
+    cd engine
+    .\.venv\Scripts\Activate.ps1
+    uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+  Then start your tunnel and point `VITE_ENGINE_URL` at the tunnel’s **https** origin.
+
+ENGINE — CORS
+-------------
+  In `engine/.env` set (comma-separated, no spaces after commas is fine):
+
+    GM_CORS_ORIGINS=https://your-deployment.vercel.app,https://your-deployment-git-main-xxx.vercel.app
+
+  Include **preview** URLs if you use Vercel preview deployments.
+
+  Local dev defaults already allow `http://localhost:5173` and `127.0.0.1:5173`.
+
+SECURITY NOTE
+-------------
+  Exposing the Engine to the internet is sensitive. Prefer tunnel auth, IP allowlists on the tunnel, or VPN;
+  do not rely on CORS alone for protection.

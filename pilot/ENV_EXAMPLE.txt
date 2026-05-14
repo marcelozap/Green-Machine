@@ -1,0 +1,5 @@
+# Pilot (Vercel) — copy to pilot/.env.production.local (not committed) or set in Vercel → Settings → Environment Variables
+
+# Public HTTPS URL of your PC Engine (ngrok, Cloudflare Tunnel, etc.). No trailing slash.
+# Browsers block https://vercel.app → http://localhost (mixed content); Engine URL must be HTTPS.
+VITE_ENGINE_URL=https://your-subdomain.ngrok-free.app

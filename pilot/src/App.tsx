@@ -7,6 +7,7 @@ import {
   type IChartApi,
   type ISeriesApi,
 } from "lightweight-charts";
+import { engineUrl } from "./engineUrl";
 
 type EquityPoint = [string, number];
 
@@ -122,7 +123,7 @@ export default function App() {
 
   const runBacktest = useCallback(async (prompt: string) => {
     setSidebar((s) => s + `\n> ${prompt}\n`);
-    const res = await fetch("/backtest/llm", {
+    const res = await fetch(engineUrl("/backtest/llm"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ prompt, config: null }),
@@ -168,9 +169,9 @@ export default function App() {
   useEffect(() => {
     void (async () => {
       try {
-        const h = await fetch("/health");
+        const h = await fetch(engineUrl("/health"));
         if (!h.ok) return;
-        const m = await fetch("/market/snapshot");
+        const m = await fetch(engineUrl("/market/snapshot"));
         if (!m.ok) return;
         const j = (await m.json()) as { spy: number; vix: number };
         setSnapshot({ spy: j.spy.toFixed(2), vix: j.vix.toFixed(2) });
