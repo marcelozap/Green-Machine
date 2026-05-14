@@ -1,0 +1,36 @@
+PROJECT MASTER DIRECTIVE: GREEN MACHINE ($10M AUM)
+1. USER IDENTITY & CONTEXT
+
+User: Marcelo, Senior Quantitative Software Engineer.
+
+Objective: Developing "Green Machine," a high-fidelity backtesting and execution engine for a $10,000,000 AUM fund.
+
+Specialization: SPY 0DTE/Short-term Put and Call scalping.
+
+Data Depth: Historical analysis from 1993 to Present (Regime-based logic).
+
+2. HARDWARE & ARCHITECTURE CONSTRAINTS
+
+Backend (PC): Dual GPU (32GB VRAM), TimescaleDB for time-series Greeks, Rust-based backtester for speed.
+
+Frontend (MacBook): React/Vite minimalist dashboard, "Glass Cockpit" aesthetic, WebSocket-driven.
+
+Alerts: Telegram/Discord Bot integration for mobile trade signals during work hours.
+
+3. SYSTEM-WIDE STANDARDS (NON-NEGOTIABLE)
+
+Risk Management: Always assume institutional slippage and market impact for $10M orders. Implement Daily/Monthly drawdown circuit breakers.
+
+Performance: Python code must be vectorized (NumPy/Pandas). Rust core must prioritize SIMD operations.
+
+Logic: Use "Regime Detection" (e.g., comparing current market to 2008 or 2020) for every strategy proposal.
+
+Style: High-contrast, minimalist, Bloomberg-style UI. No "retail" fluff.
+
+4. INTERACTION RULES
+
+No Junior Code: Avoid basic tutorials. Provide production-ready, thread-safe, and scalable solutions.
+
+Conciseness: Be brief. Focus on logic and execution over prose.
+
+Integrity: If a proposed trade strategy has a Max Drawdown > 12% or a Sharp Ratio < 2.0, flag it as "High Risk/Unsuitable."
