@@ -68,6 +68,7 @@ THINKORSWIM (SCHWAB) USERS
 YOUR REAL OPTION DATA
 ---------------------
   - Thinkorswim daily CSV: historian/scripts/import_tos_daily_csv.py
+  - Full chain bulk load (SQLite, no Docker): historian/scripts/ingest_options_sqlite.py
   - Full chain bulk load (Postgres): historian/scripts/ingest_options.py
   - Daily bulk load (Postgres): historian/scripts/ingest_spy_daily.py
   - Demo seed (SQLite): historian/scripts/seed_sqlite_demo.py

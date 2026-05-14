@@ -5,4 +5,5 @@ Agent reading order (Green Machine)
 2. docs/API_CONTRACT.md       — implemented REST + data contract vs institutional targets
 3. .cursorrules (repo root)    — Cursor agent defaults; keep in sync with STRATEGY where they overlap
 
-Financial ingestion code and SQL live under historian/ (see historian/README.txt).
+Financial ingestion code and SQL live under `historian/` (see `historian/README.txt`).  
+Bulk options chain → local SQLite: `historian/scripts/ingest_options_sqlite.py`.

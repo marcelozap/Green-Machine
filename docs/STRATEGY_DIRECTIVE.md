@@ -1,7 +1,10 @@
 # STRATEGY_DIRECTIVE.md — Green Machine ($10M AUM)
 
+**Version:** 1.0.1 (May 2026)  
 **Audience:** Marcelo (Head of Strategy) + all Cursor / Opus agents on Engine and Pilot.  
 **Companion:** `docs/API_CONTRACT.md` (technical contract).
+
+When the fund issues an updated mandate document, **replace this file wholesale** and bump the version line.
 
 ---
 
