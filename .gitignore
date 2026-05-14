@@ -13,15 +13,15 @@ build/
 .pytest_cache/
 .ruff_cache/
 
-# Node
-frontend/node_modules/
-frontend/dist/
-frontend/tsconfig.tsbuildinfo
+# Node (Pilot)
+pilot/node_modules/
+pilot/dist/
+pilot/tsconfig.tsbuildinfo
 *.log
 npm-debug.log*
 
-# Rust
-rust_executioner/target/
+# Rust (Engine)
+engine/rust_executioner/target/
 *.so
 *.pyd
 *.dll
@@ -32,8 +32,8 @@ rust_executioner/target/
 .DS_Store
 Thumbs.db
 
-# Local SQLite (default; no Docker)
-backend/data/*.db
+# Financial / local DBs (keep data/.gitkeep only)
+data/*.db
 
 # Docker volumes (local)
 *.local

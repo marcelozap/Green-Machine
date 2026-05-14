@@ -10,7 +10,7 @@ services:
       - "5432:5432"
     volumes:
       - green_machine_pgdata:/var/lib/postgresql/data
-      - ./sql:/docker-entrypoint-initdb.d:ro
+      - ./historian/sql:/docker-entrypoint-initdb.d:ro
 
 volumes:
   green_machine_pgdata:

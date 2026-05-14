@@ -1,4 +1,4 @@
-# Copy to backend\.env and adjust (optional — SQLite is the default).
+# Copy to engine\.env when running uvicorn from the engine/ directory (optional).
 
 # Use Postgres/Timescale instead of local SQLite:
 # GM_DATABASE_URL=postgresql+asyncpg://USER:PASS@127.0.0.1:5432/greenmachine

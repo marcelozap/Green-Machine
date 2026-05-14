@@ -1,14 +1,22 @@
-GREEN MACHINE — run without Docker
-====================================
+GREEN MACHINE — monorepo layout (two-machine workflow)
+======================================================
+
+REPOSITORY STRUCTURE
+--------------------
+  engine/       PC — FastAPI + Python backtester; Rust core in engine/rust_executioner/
+  pilot/        MacBook — React/Vite Glass Cockpit (proxies API to Engine)
+  historian/    PC — SQL migrations (historian/sql), ingest & seed scripts (historian/scripts)
+  docs/         API_CONTRACT.md, STRATEGY_DIRECTIVE.md
+  data/         Local SQLite (greenmachine.db) and future transaction DBs (*.db gitignored)
 
 WHAT YOU NEED (minimal)
 -----------------------
   1) Python 3.11+ from https://www.python.org/downloads/
-  2) Node.js LTS from https://nodejs.org/ (for the cockpit UI only)
+  2) Node.js LTS from https://nodejs.org/ (for Pilot only)
 
-The backend uses a SQLite file at:
-  backend\data\greenmachine.db
-No Postgres, Docker, or Timescale is required unless you choose to use them later.
+The Engine uses SQLite by default at:
+  data\greenmachine.db   (repository root)
+No Postgres, Docker, or Timescale is required unless you choose them later.
 
 LEGAL / MONEY REALITY
 ---------------------
@@ -19,30 +27,30 @@ LEGAL / MONEY REALITY
 
 QUICK START (Windows PowerShell)
 --------------------------------
-  From the project folder (where this file lives):
+  From the repository root:
 
     .\run-windows.ps1
 
   That script will:
-    - create backend\.venv if missing
-    - pip install backend requirements
-    - seed demo SQLite data (optional but recommended first run)
-    - print commands to start API + UI in two terminals
+    - create engine\.venv if missing
+    - pip install engine/requirements.txt
+    - seed demo SQLite under data\
+    - npm install in pilot/ if needed
 
-  Manual equivalent:
+  Then run two terminals:
 
-    cd backend
-    python -m venv .venv
-    .\.venv\Scripts\Activate.ps1
-    pip install -r requirements.txt
-    python scripts\seed_sqlite_demo.py
-    uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+    Terminal A (Engine):
+      cd engine
+      .\.venv\Scripts\Activate.ps1
+      uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 
-    cd ..\frontend
-    npm install
-    npm run dev
+    Terminal B (Pilot):
+      cd pilot
+      npm run dev
 
   Open http://127.0.0.1:5173 — use Ctrl+K to run a backtest.
+
+  From MacBook: clone the same repo, work only under pilot/ unless you also run Engine locally.
 
 THINKORSWIM (SCHWAB) USERS
 ---------------------------
@@ -51,34 +59,32 @@ THINKORSWIM (SCHWAB) USERS
   Schwab OAuth — use CSV exports from TOS for the fastest path.
 
   Daily / chart style CSV (SPY or your underlying):
-    cd backend
-    .\.venv\Scripts\Activate.ps1
-    python scripts\import_tos_daily_csv.py "C:\path\YourExport.csv"
+    cd <repo-root>
+    engine\.venv\Scripts\python.exe historian\scripts\import_tos_daily_csv.py "C:\path\YourExport.csv"
 
-  If headers are nonstandard, pass explicit columns, for example:
-    python scripts\import_tos_daily_csv.py export.csv --col-date Time --col-close LAST
-
-  Account / trade history CSV (fills with Exec Time, Side, Symbol, etc.) is useful for
-  journaling and tax — for chain backtests you still want OHLCV or full option marks.
-  Map fills into the Vault later if you add a trade-replay module.
+  If headers are nonstandard:
+    engine\.venv\Scripts\python.exe historian\scripts\import_tos_daily_csv.py export.csv --col-date Time --col-close LAST
 
 YOUR REAL OPTION DATA
 ---------------------
-  - Thinkorswim daily / chart CSV: scripts\import_tos_daily_csv.py (see section above).
-  - Full chain history: use scripts\ingest_options.py against Postgres if you add it later.
-  - Daily SPY + VIX for the Vault path: use scripts\ingest_spy_daily.py against Postgres,
-    or import_tos_daily_csv.py / seed_sqlite_demo.py into SQLite.
-
-  With only SQLite, use import_tos_daily_csv.py or DB Browser for SQLite for custom loads.
+  - Thinkorswim daily CSV: historian/scripts/import_tos_daily_csv.py
+  - Full chain bulk load (Postgres): historian/scripts/ingest_options.py
+  - Daily bulk load (Postgres): historian/scripts/ingest_spy_daily.py
+  - Demo seed (SQLite): historian/scripts/seed_sqlite_demo.py
 
 POSTGRES / TIMESCALE (optional, later)
 --------------------------------------
-  Set environment variable:
+  Set:
     GM_DATABASE_URL=postgresql+asyncpg://USER:PASS@HOST:5432/DBNAME
-  Apply sql\001_init_timescale.sql (and 002_*) on the server; keep docker-compose.yml
-  only if you want containerized Postgres.
+  Apply historian/sql/001_init_timescale.sql (and 002_*) on the server.
+  docker-compose.yml mounts historian/sql for first-time container init.
 
 LLM (optional)
 --------------
   Set OPENAI_API_KEY or ANTHROPIC_API_KEY for structured strategy parsing; otherwise
   the stack uses built-in keyword heuristics.
+
+DOCUMENTATION
+--------------
+  docs/API_CONTRACT.md       — REST + data contract (implemented vs target)
+  docs/STRATEGY_DIRECTIVE.md — fund context and non-negotiables (see also .cursorrules)

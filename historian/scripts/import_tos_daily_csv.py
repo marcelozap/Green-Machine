@@ -7,7 +7,7 @@ Typical workflows:
   - Chart or grid export to CSV, then this script; or
   - Charles Schwab Market Data / Trader API (OAuth) for automation — not included here.
 
-This script only needs the Python deps from requirements.txt (pandas).
+This script only needs the Python deps from engine/requirements.txt (pandas).
 """
 
 from __future__ import annotations
@@ -19,8 +19,8 @@ from pathlib import Path
 
 import pandas as pd
 
-ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_DB = ROOT / "data" / "greenmachine.db"
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_DB = _REPO_ROOT / "data" / "greenmachine.db"
 
 # Normalized key -> possible header names (lowercase, spaces stripped for match)
 _ALIASES: dict[str, tuple[str, ...]] = {

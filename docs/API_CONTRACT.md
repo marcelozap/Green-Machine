@@ -52,9 +52,9 @@ Base path is **not** `/api/v1`; routers are mounted at **root-relative** paths b
 
 ### Data plane (current)
 
-- **Default DB:** SQLite file `backend/data/greenmachine.db` (`GM_DATABASE_URL` overrides with `postgresql+asyncpg://...`).
-- **Tables (SQLite auto-DDL on startup):** `spy_daily`, `market_states`, `spy_options_history` (Postgres/Timescale uses `sql/*.sql` migrations separately).
-- **Ingest helpers:** `scripts/seed_sqlite_demo.py`, `scripts/import_tos_daily_csv.py` (Thinkorswim-style CSV → `spy_daily`).
+- **Default DB:** SQLite file `<repo>/data/greenmachine.db` (`GM_DATABASE_URL` overrides with `postgresql+asyncpg://...`).
+- **Tables (SQLite auto-DDL on startup):** `spy_daily`, `market_states`, `spy_options_history` (Postgres/Timescale uses `historian/sql/*.sql` migrations separately).
+- **Ingest / training scripts:** `historian/scripts/seed_sqlite_demo.py`, `historian/scripts/import_tos_daily_csv.py` (Thinkorswim-style CSV → `spy_daily`).
 
 ### Risk / execution (current code behavior)
 

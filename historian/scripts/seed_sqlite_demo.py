@@ -14,8 +14,8 @@ import sqlite3
 from datetime import date, timedelta
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-DB_PATH = ROOT / "data" / "greenmachine.db"
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+DB_PATH = _REPO_ROOT / "data" / "greenmachine.db"
 
 
 def _business_days(end: date, n: int) -> list[date]:

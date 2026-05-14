@@ -7,8 +7,8 @@ from pathlib import Path
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-_BACKEND_ROOT = Path(__file__).resolve().parents[1]
-_DATA_DIR = _BACKEND_ROOT / "data"
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_DATA_DIR = _REPO_ROOT / "data"
 
 SQLITE_DDL = [
     """

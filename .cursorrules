@@ -34,3 +34,11 @@ No Junior Code: Avoid basic tutorials. Provide production-ready, thread-safe, an
 Conciseness: Be brief. Focus on logic and execution over prose.
 
 Integrity: If a proposed trade strategy has a Max Drawdown > 12% or a Sharp Ratio < 2.0, flag it as "High Risk/Unsuitable."
+
+5. REPOSITORY LAYOUT (monorepo)
+
+engine/       — PC: FastAPI + Python backtester; Rust execution core under engine/rust_executioner/
+pilot/        — MacBook: React/Vite Glass Cockpit
+historian/    — PC: Timescale SQL (historian/sql), ingest & seed scripts (historian/scripts), future training
+docs/         — API_CONTRACT.md, STRATEGY_DIRECTIVE.md
+data/         — Local SQLite (greenmachine.db) and future transaction DBs (*.db gitignored)
