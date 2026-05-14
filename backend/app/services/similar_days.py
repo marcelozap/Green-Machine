@@ -41,7 +41,7 @@ async def similar_days_from_db(
                ) AS dist
         FROM market_states
         WHERE vix_close IS NOT NULL
-        ORDER BY dist ASC NULLS LAST
+        ORDER BY (dist IS NULL) ASC, dist ASC
         LIMIT :lim
         """
     )

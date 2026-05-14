@@ -32,5 +32,8 @@ rust_executioner/target/
 .DS_Store
 Thumbs.db
 
+# Local SQLite (default; no Docker)
+backend/data/*.db
+
 # Docker volumes (local)
 *.local

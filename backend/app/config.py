@@ -1,11 +1,18 @@
+from pathlib import Path
+
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_BACKEND_ROOT = Path(__file__).resolve().parents[1]
+_DEFAULT_SQLITE = f"sqlite+aiosqlite:///{(_BACKEND_ROOT / 'data' / 'greenmachine.db').as_posix()}"
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="GM_", env_file=".env", extra="ignore")
 
-    database_url: str = "postgresql+asyncpg://green:green@localhost:5432/greenmachine"
+    # Default: single SQLite file under backend/data — no Docker or Postgres required.
+    # Set GM_DATABASE_URL=postgresql+asyncpg://... when you use Timescale/Postgres.
+    database_url: str = Field(default=_DEFAULT_SQLITE)
     risk_free_annual: float = 0.04
     commission_per_contract: float = 0.0065
     max_drawdown_circuit_breaker: float = 0.5

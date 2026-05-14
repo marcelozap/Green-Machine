@@ -3,11 +3,14 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.db import engine
+from app.db_init import init_db_schema
 from app.routers import backtest, health
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    await init_db_schema(engine)
     yield
 
 

@@ -1,4 +1,4 @@
-"""Load aggregated series from the Vault (PostgreSQL / Timescale)."""
+"""Load aggregated series from the Vault (SQLite or Postgres)."""
 
 from __future__ import annotations
 
