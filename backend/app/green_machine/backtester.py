@@ -1,8 +1,8 @@
 """
-GREEN MACHINE — vectorized SPY put backtest skeleton.
+GREEN MACHINE — vectorized SPY put backtest core.
 
-Feeds full chain history when wired to the Vault; until then accepts
-in-memory bars for API/UI integration tests.
+Supports Vault daily bars, segment TP/SL, global drawdown circuit, optional 0DTE boost,
+and Black–Scholes delta QA when options columns are present.
 """
 
 from __future__ import annotations
@@ -16,7 +16,8 @@ import numpy as np
 import pandas as pd
 
 from app.config import settings
-from app.schemas import BacktestConfig, BacktestResult
+from app.green_machine.black_scholes import delta_mae_vs_history
+from app.schemas import BacktestConfig, BacktestResult, ExitRule
 
 try:
     import execution_core as _rust  # type: ignore
@@ -63,9 +64,56 @@ def _calmar(total_return: float, max_dd: float, years: float) -> float | None:
     return float(cagr / abs(max_dd))
 
 
+def _apply_segment_tp_sl(
+    mask: np.ndarray,
+    raw_edge: np.ndarray,
+    exit_rule: ExitRule,
+    contracts: int,
+) -> np.ndarray:
+    """Flatten the remainder of a segment once TP/SL thresholds are touched."""
+    n = len(mask)
+    out = np.zeros(n, dtype=np.float64)
+    tp = exit_rule.take_profit_pct
+    sl = exit_rule.stop_loss_pct
+    risk = exit_rule.risk_unit_usd
+    tp_level = float("inf") if tp is None else float(tp) * risk * contracts
+    sl_level = float("inf") if sl is None else float(sl) * risk * contracts
+
+    i = 0
+    while i < n:
+        if not mask[i]:
+            i += 1
+            continue
+        cum = 0.0
+        while i < n and mask[i]:
+            cum += raw_edge[i]
+            out[i] = raw_edge[i]
+            if cum >= tp_level or cum <= -sl_level:
+                i += 1
+                while i < n and mask[i]:
+                    out[i] = 0.0
+                    i += 1
+                break
+            i += 1
+    return out
+
+
+def _apply_circuit(net: np.ndarray, threshold: float) -> tuple[np.ndarray, bool]:
+    eq = np.cumsum(net)
+    peak = np.maximum.accumulate(eq)
+    dd = (eq - peak) / np.where(np.abs(peak) > 1e-9, np.abs(peak), 1.0)
+    out = net.copy()
+    idx = np.flatnonzero(dd <= -threshold)
+    if len(idx):
+        cut = int(idx[0])
+        out[cut + 1 :] = 0.0
+        return out, True
+    return out, False
+
+
 @dataclass
 class GreenMachineBacktester:
-    """JSON-configurable put-focused backtester (vectorized core)."""
+    """JSON-configurable put-focused backtester (vectorized core + segment risk)."""
 
     config: BacktestConfig
 
@@ -80,10 +128,6 @@ class GreenMachineBacktester:
         *,
         condition_fn: Callable[[pd.DataFrame], pd.Series] | None = None,
     ) -> BacktestResult:
-        """
-        bars: columns at minimum [date, spy_return, put_proxy_return, vix]
-        put_proxy_return: stand-in for mark-to-market on selected puts until chain data is wired.
-        """
         rf_daily = _daily_rf()
         if bars is None or bars.empty:
             rng = np.random.default_rng(42)
@@ -92,29 +136,42 @@ class GreenMachineBacktester:
             spy_r = rng.normal(0.0004, 0.012, n)
             put_r = rng.normal(-0.0002, 0.02, n) * 1.1
             vix = np.clip(15 + rng.normal(0, 2, n).cumsum() * 0.01, 10, 80)
+            dte = rng.integers(0, 6, n)
             bars = pd.DataFrame(
                 {
                     "date": dates,
                     "spy_return": spy_r,
                     "put_proxy_return": put_r,
                     "vix": vix,
+                    "dte": dte,
                 }
             )
 
         df = bars.copy()
+        mask = self._entry_mask(df)
         if condition_fn is not None:
-            mask = condition_fn(df).astype(bool)
-        else:
-            mask = self._default_mask(df)
-
+            mask = mask & condition_fn(df).astype(bool)
         mask_a = np.asarray(mask, dtype=bool)
+
+        put = df["put_proxy_return"].to_numpy(dtype=np.float64)
+        if "dte" in df.columns:
+            dte = df["dte"].to_numpy()
+            z = self.config.entry.zero_dte_vol_boost
+            put = np.where(dte == 0, put * z, put)
+
         side = -1.0 if self.config.entry.side == "short" else 1.0
-        w = min(self.config.max_contracts, 100)
-        gross = df["put_proxy_return"].to_numpy(dtype=np.float64) * side * w
+        w = int(min(self.config.max_contracts, 500))
+        gross = put * side * w
         slip = self._slippage(df["vix"].to_numpy(dtype=np.float64)) * np.abs(gross)
-        net = np.where(mask_a, gross - slip, 0.0)
-        if mask_a.any():
-            net[0] -= settings.commission_per_contract * w * 2.0
+        raw_edge = gross - slip
+
+        seg = _apply_segment_tp_sl(mask_a, raw_edge, self.config.exit, w)
+        starts = mask_a & np.r_[True, ~mask_a[:-1]]
+        comm = np.zeros(len(mask_a), dtype=np.float64)
+        comm[starts] -= settings.commission_per_contract * w * 2.0
+        net = seg + comm
+
+        net, tripped = _apply_circuit(net, settings.max_drawdown_circuit_breaker)
 
         if _rust is not None:
             equity = np.asarray(_rust.cumulative_sum_py(net.tolist()), dtype=np.float64)
@@ -130,8 +187,19 @@ class GreenMachineBacktester:
         years = max(len(df) / 252.0, 1e-6)
         calmar = _calmar(total_return, mdd, years)
 
-        circuit = abs(mdd) >= settings.max_drawdown_circuit_breaker
+        circuit = tripped
         curve = [(d.isoformat(), float(e)) for d, e in zip(df["date"], equity, strict=False)]
+
+        bs_mae = None
+        need_bs = {"underlying_price", "strike", "iv", "delta", "dte_days"}
+        if need_bs.issubset(df.columns):
+            tail = df.iloc[-4000:]
+            bs_mae = delta_mae_vs_history(tail, settings.risk_free_annual)
+
+        notes = (
+            "Segment TP/SL + commission on opens; circuit breaker clips tail PnL. "
+            "Populate `spy_daily` for production paths."
+        )
 
         return BacktestResult(
             equity_curve=curve,
@@ -141,11 +209,16 @@ class GreenMachineBacktester:
             max_drawdown=float(mdd),
             total_return=total_return,
             circuit_breaker_hit=circuit,
-            notes="Demo path: replace put_proxy_return with Vault chain marks.",
+            notes=notes,
+            bs_delta_mae=bs_mae,
         )
 
-    def _default_mask(self, df: pd.DataFrame) -> pd.Series:
-        return pd.Series(True, index=df.index)
+    def _entry_mask(self, df: pd.DataFrame) -> pd.Series:
+        m = pd.Series(True, index=df.index)
+        if "dte" in df.columns:
+            d = df["dte"].to_numpy()
+            m &= (d >= self.config.entry.dte_min) & (d <= self.config.entry.dte_max)
+        return m
 
     def _slippage(self, vix: np.ndarray) -> np.ndarray:
         half_spread = 0.0005 + np.clip(vix / 100.0, 0.0, 0.02) * 0.001

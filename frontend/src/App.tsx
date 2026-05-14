@@ -1,14 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  AreaSeries,
   ColorType,
   createChart,
   CrosshairMode,
   type IChartApi,
   type ISeriesApi,
-  LineStyle,
 } from "lightweight-charts";
 
 type EquityPoint = [string, number];
+
+type SimilarDay = {
+  trade_date: string;
+  vix_close: number | null;
+  distance: number;
+};
 
 type BacktestResponse = {
   equity_curve: EquityPoint[];
@@ -19,6 +25,9 @@ type BacktestResponse = {
   total_return: number;
   circuit_breaker_hit: boolean;
   notes: string;
+  similar_days?: SimilarDay[];
+  llm_summary?: string | null;
+  bs_delta_mae?: number | null;
 };
 
 const ACCENT = "#39FF14";
@@ -61,7 +70,7 @@ function ChartPane({ data }: { data: EquityPoint[] }) {
       timeScale: { borderVisible: false },
       localization: { locale: "en-US" },
     });
-    const series = chart.addAreaSeries({
+    const series = chart.addSeries(AreaSeries, {
       lineColor: ACCENT,
       topColor: "rgba(57,255,20,0.35)",
       bottomColor: "rgba(5,5,5,0)",
@@ -125,9 +134,24 @@ export default function App() {
     const body = (await res.json()) as BacktestResponse;
     setEquity(body.equity_curve);
     setStats(body);
+    const sim =
+      body.similar_days?.length ?
+        `\n**Similar regimes:** ${body.similar_days
+          .slice(0, 6)
+          .map((d) => `${d.trade_date} (VIX ${d.vix_close?.toFixed(1) ?? "—"})`)
+          .join(" · ")}\n`
+        : "";
+    const llm = body.llm_summary ? `\n_${body.llm_summary}_\n` : "";
+    const bs =
+      body.bs_delta_mae != null && !Number.isNaN(body.bs_delta_mae)
+        ? `\nBS Δ MAE: ${body.bs_delta_mae.toFixed(4)}\n`
+        : "";
     setSidebar(
       (s) =>
         s +
+        llm +
+        sim +
+        bs +
         `\n**PnL curve updated.** Sharpe: ${body.sharpe?.toFixed(2) ?? "n/a"} · ` +
         `Max DD: ${(body.max_drawdown * 100).toFixed(2)}% · ` +
         `Circuit: ${body.circuit_breaker_hit ? "TRIP" : "OK"}\n`,
@@ -162,7 +186,10 @@ export default function App() {
       `Sharpe ${stats.sharpe?.toFixed(2) ?? "n/a"}`,
       `Sortino ${stats.sortino?.toFixed(2) ?? "n/a"}`,
       `Calmar ${stats.calmar?.toFixed(2) ?? "n/a"}`,
-    ].join("  ·  ");
+      stats.bs_delta_mae != null ? `Δ MAE ${stats.bs_delta_mae.toFixed(3)}` : null,
+    ]
+      .filter(Boolean)
+      .join("  ·  ");
   }, [stats]);
 
   return (
