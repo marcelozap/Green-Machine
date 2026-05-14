@@ -1,0 +1,22 @@
+Push Green Machine to GitHub
+==============================
+
+This repo is ready to host on GitHub **without** large binaries: ``tools/*.exe`` and ``engine/static/cockpit/``
+are gitignored. Anyone who clones runs ``tools/download.ps1`` and ``cd pilot && npm run build`` when they need CLIs / static UI.
+
+1) Create an empty repo on GitHub (web UI: New repository), **no** README/license if you already have them here.
+
+2) From your machine, in the repo root (replace YOUR_USER and REPO):
+
+    git remote add origin https://github.com/YOUR_USER/REPO.git
+    git branch -M main
+    git push -u origin main
+
+   If GitHub shows HTTPS auth issues, use a **Personal Access Token** as the password, or install GitHub CLI:
+
+    gh auth login
+    gh repo create REPO --private --source=. --remote=origin --push
+
+3) Never commit secrets: keep ``engine/.env``, ``pilot/.env*``, and API keys **local** only (already in ``.gitignore`` where applicable).
+
+4) Optional: connect **Fly.io** to GitHub for auto-deploy from ``main`` (Fly dashboard -> app -> Deploy from GitHub).

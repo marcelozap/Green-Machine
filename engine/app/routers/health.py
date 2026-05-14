@@ -25,5 +25,16 @@ async def health_ready(session: AsyncSession = Depends(get_session)) -> Heartbea
 
 
 @router.get("/market/snapshot", response_model=MarketSnapshot)
-async def market_snapshot() -> MarketSnapshot:
-    return MarketSnapshot(spy=582.12, vix=18.4)
+async def market_snapshot(session: AsyncSession = Depends(get_session)) -> MarketSnapshot:
+    res = await session.execute(
+        text("SELECT trade_date, close, vix_close FROM spy_daily ORDER BY trade_date DESC LIMIT 1"),
+    )
+    row = res.first()
+    if not row or row[1] is None:
+        return MarketSnapshot(spy=None, vix=None, as_of=str(row[0]) if row and row[0] is not None else None)
+    td, close, vx = row[0], row[1], row[2]
+    return MarketSnapshot(
+        spy=float(close),
+        vix=float(vx) if vx is not None else None,
+        as_of=str(td) if td is not None else None,
+    )

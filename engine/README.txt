@@ -10,4 +10,6 @@ Run from this directory:
 
 Default SQLite DB path: `<repo-root>/data/greenmachine.db` (see `app/config.py`).
 
+Nexus (XIV): `unified_nexus` table + routes `/nexus/*`, `/auth/voice-pass`, `/integrations/*` — same process and DB.
+
 Rust core: `rust_executioner/` (maturin / PyO3 when wired).

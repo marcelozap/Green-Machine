@@ -36,15 +36,26 @@ if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
 }
 
 Write-Host ""
-Write-Host "=== Next: run TWO terminals ===" -ForegroundColor Green
-Write-Host "Terminal A (Engine / API):"
+Write-Host "=== Option A — one site (UI + API on port 8000) ===" -ForegroundColor Green
+Write-Host "  cd `"$Pilot`""
+Write-Host "  npm run build"
 Write-Host "  cd `"$Engine`""
 Write-Host "  .\.venv\Scripts\Activate.ps1"
 Write-Host "  uvicorn app.main:app --reload --host 127.0.0.1 --port 8000"
+Write-Host "  Open http://127.0.0.1:8000 — live desk + EOD upload in the right column."
 Write-Host ""
-Write-Host "Terminal B (Pilot / UI):"
+Write-Host "=== Option B — dev (hot-reload UI, Vite proxy) ===" -ForegroundColor Green
+Write-Host "Terminal A (Engine):"
+Write-Host "  cd `"$Engine`""
+Write-Host "  .\.venv\Scripts\Activate.ps1"
+Write-Host "  uvicorn app.main:app --reload --host 127.0.0.1 --port 8000"
+Write-Host "Terminal B (Pilot):"
 Write-Host "  cd `"$Pilot`""
 Write-Host "  npm run dev"
+Write-Host "  Open http://127.0.0.1:5173"
 Write-Host ""
-Write-Host "Then open http://127.0.0.1:5173 and press Ctrl+K for the command bar."
-Write-Host "Details: README.txt in this folder."
+Write-Host "=== Option C — Docker (same as Option A, no local Node after image build) ===" -ForegroundColor Green
+Write-Host "  docker compose up --build web"
+Write-Host "  Open http://127.0.0.1:8000"
+Write-Host ""
+Write-Host "Press Ctrl+K in the cockpit for the backtest command bar. Details: README.txt"

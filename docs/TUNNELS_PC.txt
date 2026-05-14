@@ -1,0 +1,55 @@
+Tunnels & CLIs — official download pages (PC / Windows)
+=========================================================
+
+Local copy in this repo (if present)
+-------------------------------------
+  Binaries are **not** committed to GitHub. After you clone, run:
+
+    powershell -ExecutionPolicy Bypass -File tools/download.ps1
+
+  That pulls **cloudflared** and **flyctl** from their official **GitHub releases** into ``tools/``.
+  See **tools/README.txt**.
+
+Fly.io (host the whole app in the cloud)
+----------------------------------------
+  Docs + install (PowerShell, scoop, etc.):
+
+    https://fly.io/docs/hands-on/install-flyctl/
+
+  After install: ``fly auth login`` then see **docs/HOSTING_FLY.txt** in this repo.
+
+Cloudflare Tunnel (``cloudflared`` — free HTTPS to localhost)
+--------------------------------------------------------------
+  Downloads (pick Windows amd64 .msi or .exe):
+
+    https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/installation/
+
+  Direct downloads listing (GitHub releases):
+
+    https://github.com/cloudflare/cloudflared/releases
+
+  Quick test (Engine on 8000):
+
+    cloudflared tunnel --url http://127.0.0.1:8000
+
+  Cloudflare may show an interstitial on free quick tunnels; that is normal.
+
+ngrok (HTTPS tunnel to localhost)
+---------------------------------
+  Sign up + download:
+
+    https://ngrok.com/download
+
+  Docs:
+
+    https://ngrok.com/docs
+
+  After install, follow ngrok’s auth token step, then e.g.:
+
+    ngrok http 8000
+
+Which to use?
+-------------
+  - **Fly deploy** → no tunnel needed for the public site; your app runs on Fly.
+  - **PC only, phone hits your PC** → **cloudflared** or **ngrok** while the PC is on.
+  See also **docs/VERCEL_AND_ENGINE.txt** for HTTPS + CORS notes.

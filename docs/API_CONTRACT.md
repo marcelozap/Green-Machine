@@ -13,10 +13,13 @@
 |--------|------------|
 | FastAPI app | `http://127.0.0.1:8000` (default `uvicorn app.main:app --port 8000`) |
 | OpenAPI docs | `http://127.0.0.1:8000/docs` |
-| React “Glass Cockpit” (Vite dev) | `http://127.0.0.1:5173` (proxies `/health`, `/backtest`, `/market` to port 8000 when `VITE_ENGINE_URL` unset) |
+| React “Glass Cockpit” (Vite dev) | `http://127.0.0.1:5173` (proxies `/health`, `/backtest`, `/market`, `/live`, `/ingest`, `/nexus`, `/auth`, `/integrations` to port 8000 when `VITE_ENGINE_URL` unset) |
 | Pilot on **Vercel** | Set **`VITE_ENGINE_URL`** to public **HTTPS** Engine base (tunnel); Engine must allow origin via **`GM_CORS_ORIGINS`** — see `docs/VERCEL_AND_ENGINE.txt`. |
+| **Static cockpit** (same origin as Engine) | After `npm run build` in `pilot/`, files land in `engine/static/cockpit/`; `uvicorn` serves them at **`http://127.0.0.1:8000/`** when that directory is non-empty. |
 
-**There is no WebSocket live feed in the codebase yet.** Pilot uses HTTP + polling patterns only.
+**Cockpit gate (optional):** set **`GM_COCKPIT_PASSWORD`** (and optional **`GM_COCKPIT_USER`**, default `green`) to require **HTTP Basic Auth** on the whole app when using a public tunnel on your phone. Exempt: `/health`, `/docs`, `/openapi.json`, `/redoc`. `OPTIONS` is never challenged (CORS preflight).
+
+**Live updates:** Server-Sent Events at **`GET /live/stream`** (JSON in each `data:` line: latest `spy_daily` bar + recent in-memory desk events). Trade notes: **`POST /live/note`**. End-of-day CSV: **`POST /ingest/eod`** with query `kind=tos_daily` or `kind=options` (multipart field `file`).
 
 ### REST (current)
 
@@ -28,7 +31,29 @@ Base path is **not** `/api/v1`; routers are mounted at **root-relative** paths b
 |--------|------|---------------------|
 | `GET` | `/health` | `Heartbeat` — liveness (no DB). |
 | `GET` | `/health/ready` | `Heartbeat` — DB ping (`SELECT 1`). |
-| `GET` | `/market/snapshot` | `MarketSnapshot` — placeholder SPY/VIX until wired to feed. |
+| `GET` | `/market/snapshot` | `MarketSnapshot` — last `spy_daily` close / `vix_close` / `as_of` trade date (null if empty). |
+
+#### Live desk & ingest
+
+| Method | Path | Body | Response |
+|--------|------|------|----------|
+| `GET` | `/live/stream` | — | `text/event-stream`; each event: JSON `{ snapshot, events }` |
+| `GET` | `/live/recent` | — | Same payload as one SSE frame (JSON) |
+| `POST` | `/live/note` | `{ "text": string }` | `{ "ok": "true" }` |
+| `POST` | `/ingest/eod` | query `kind` = `tos_daily` or `options`; multipart field `file` (.csv) | `{ ok, saved, kind }` — ingest runs in background; progress appears on `/live/stream` |
+
+#### Nexus (XIV life domains — same Engine + DB)
+
+| Method | Path | Body | Response |
+|--------|------|------|------------|
+| `POST` | `/auth/voice-pass` | `{ "passphrase": string }` | `{ ok, clearance, message }` — requires `XIV_VOICE_PASSPHRASE` or `GM_XIV_VOICE_PASSPHRASE` |
+| `POST` | `/nexus/records` | `UnifiedNexusCreate` JSON | `UnifiedNexusRead` |
+| `GET` | `/nexus/records` | query `domain`, `limit` | list of rows |
+| `GET` | `/nexus/records/{id}` | — | row |
+| `PATCH` | `/nexus/records/{id}` | partial JSON | row |
+| `GET` | `/nexus/state-switcher/evaluate` | — | Market boredom / `RECOMEND_PIVOT` hint |
+| `GET` | `/integrations/google-calendar/status` | — | placeholder JSON |
+| `GET` | `/integrations/grocery-rehab/status` | — | placeholder JSON |
 
 #### Backtest / strategy
 
@@ -54,7 +79,7 @@ Base path is **not** `/api/v1`; routers are mounted at **root-relative** paths b
 ### Data plane (current)
 
 - **Default DB:** SQLite file `<repo>/data/greenmachine.db` (`GM_DATABASE_URL` overrides with `postgresql+asyncpg://...`).
-- **Tables (SQLite auto-DDL on startup):** `spy_daily`, `market_states`, `spy_options_history` (Postgres/Timescale uses `historian/sql/*.sql` migrations separately).
+- **Tables (SQLite auto-DDL on startup):** `spy_daily`, `market_states`, `spy_options_history`, **`unified_nexus`** (Nexus / XIV — also created via SQLAlchemy `create_all`).
 - **Ingest / training scripts:** `historian/scripts/seed_sqlite_demo.py`, `historian/scripts/import_tos_daily_csv.py` (Thinkorswim-style CSV → `spy_daily`); **`historian/scripts/ingest_options_sqlite.py`** (full chain CSV → SQLite `spy_options_history`); Postgres bulk: `historian/scripts/ingest_options.py`, `ingest_spy_daily.py`.
 
 ### Risk / execution (current code behavior)

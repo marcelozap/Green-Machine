@@ -51,3 +51,34 @@ SECURITY NOTE
 -------------
   Exposing the Engine to the internet is sensitive. Prefer tunnel auth, IP allowlists on the tunnel, or VPN;
   do not rely on CORS alone for protection.
+
+EASIEST PHONE ACCESS (one HTTPS URL + password)
+-----------------------------------------------
+  1) Build the cockpit into the Engine (same origin as the API — avoids mixed content):
+
+       cd pilot && npm run build
+
+  2) In engine/.env set a strong password (and optional username; default user is ``green``):
+
+       GM_COCKPIT_PASSWORD=your-long-secret
+       GM_COCKPIT_USER=green
+
+     When GM_COCKPIT_PASSWORD is set, the Engine requires HTTP Basic Authentication on
+     all routes except ``/health``, ``/docs``, and OpenAPI JSON (so you can still read docs).
+
+  3) Run Engine on all interfaces:
+
+       uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+  4) Start a free HTTPS tunnel to your PC, e.g. Cloudflare (``cloudflared tunnel --url http://127.0.0.1:8000``)
+     or ngrok. Open the tunnel URL on your phone; enter username + password when Safari/Chrome prompts.
+
+  If you use Vercel for Pilot and a tunnel only for the API, the browser will not automatically send Basic
+  auth to the API from the Vercel page — for that split setup either omit GM_COCKPIT_PASSWORD and use the
+  tunnel vendor's access controls, or serve the built cockpit from the tunnel URL instead of Vercel.
+
+FREE TIER REALITY
+-----------------
+  Quick tunnels (cloudflared ``tunnel --url``, ngrok free) are usually **$0** for personal / light use but
+  URLs can rotate and vendors change limits — read their current terms. You still pay **electricity + your
+  PC being on** while the tunnel runs; stop the tunnel when you do not need phone access.

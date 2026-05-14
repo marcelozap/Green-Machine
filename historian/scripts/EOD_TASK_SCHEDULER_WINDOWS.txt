@@ -1,0 +1,52 @@
+Green Machine — Windows Task Scheduler (Mon–Fri 8:00 PM EOD upload)
+======================================================================
+
+Goal: after the US cash session, run ``windows_task_eod_schedule.ps1`` so ``eod_upload_agent.py``
+POSTs your CSV to the Engine (``/ingest/eod``). Time is **your PC local clock** (adjust if you want
+strict US/Eastern).
+
+Prerequisites
+---------------
+  - Engine running (e.g. ``uvicorn`` on port 8000) at that time — PC on, not sleeping.
+  - Paths in ``historian\scripts\windows_task_eod_schedule.ps1`` edited (CSV path or glob).
+  - If you use ``GM_COCKPIT_PASSWORD`` on the Engine, set ``GM_COCKPIT_USER`` and ``GM_COCKPIT_PASSWORD``
+    in the task Environment (Task Properties -> General -> "Run whether user is logged on or not" may need stored creds).
+
+Option A — Task Scheduler GUI (easiest)
+-----------------------------------------
+  1) Open **Task Scheduler** -> **Create Task** (not Basic, so you can pick multiple weekdays).
+
+  2) **General** tab: name ``Green Machine EOD upload``. Choose "Run only when user is logged on" unless you know how to run headless with saved password.
+
+  3) **Triggers** tab -> New:
+       - Begin the task: **On a schedule**
+       - Settings: **Weekly**
+       - Recur every: **1** weeks on: **Monday Tuesday Wednesday Thursday Friday**
+       - Start: today's date, time **8:00:00 PM** (20:00)
+       - Enabled: yes
+
+  4) **Actions** tab -> New:
+       - Action: **Start a program**
+       - Program/script: **powershell.exe**
+       - Add arguments:
+           -NoProfile -ExecutionPolicy Bypass -File "FULL_PATH_TO\historian\scripts\windows_task_eod_schedule.ps1"
+         (replace FULL_PATH_TO with your repo root, e.g. ``C:\Users\You\green-machine\historian\scripts\windows_task_eod_schedule.ps1``)
+
+  5) **Conditions** tab: uncheck "Start the task only if the computer is on AC power" if you use a laptop on battery.
+
+  6) **Settings** tab: optionally enable "Run task as soon as possible after a scheduled start is missed" if the PC was off at 8 PM.
+
+Option B — Command line (``schtasks``)
+--------------------------------------
+  Adjust the path in /TR. Example (one line):
+
+    schtasks /CREATE /TN "GreenMachineEOD" /TR "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\path\to\repo\historian\scripts\windows_task_eod_schedule.ps1\"" /SC WEEKLY /D MON,TUE,WED,THU,FRI /ST 20:00 /RL LIMITED /F
+
+  If /D comma syntax fails on your Windows build, use the GUI and pick five weekdays.
+
+Different equities later
+--------------------------
+  - Point the script at whatever CSV you export (change ``$CsvFile`` or ``$Glob``).
+  - ``import_tos_daily_csv.py`` supports ``--replace-symbol SYMBOL`` when ingesting (tag / context); the agent
+    calls the same ingest pipeline via ``/ingest/eod?kind=tos_daily``.
+  - Options chains use ``--kind options`` in the script / task if you switch to normalized chain CSVs.

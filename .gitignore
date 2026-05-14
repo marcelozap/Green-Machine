@@ -35,5 +35,11 @@ Thumbs.db
 # Financial / local DBs (keep data/.gitkeep only)
 data/*.db
 
-# Docker volumes (local)
-*.local
+# Downloaded CLIs (local binaries; see docs/TUNNELS_PC.txt and tools/README.txt)
+/tools/*.exe
+/tools/*.zip
+/tools/flyctl_extract/
+
+# Built Pilot UI (rebuild: cd pilot && npm run build)
+engine/static/cockpit/
+

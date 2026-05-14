@@ -17,6 +17,10 @@ class Heartbeat(BaseModel):
 class MarketSnapshot(BaseModel):
     spy: float | None = None
     vix: float | None = None
+    as_of: str | None = Field(
+        default=None,
+        description="trade_date of the bar (YYYY-MM-DD) — last row in spy_daily after your EOD import.",
+    )
 
 
 class EntryRule(BaseModel):
@@ -92,3 +96,9 @@ class LLMBacktestRequest(BaseModel):
 
     prompt: str
     config: BacktestConfig | None = None
+
+
+class LiveNoteBody(BaseModel):
+    """Quick desk note pushed to the live feed (e.g. after a trade)."""
+
+    text: str = Field(..., min_length=1, max_length=800)

@@ -1,0 +1,76 @@
+HOSTING — Fly.io (Green Machine always on, HTTPS)
+=================================================
+
+This runs the **same Docker image** as local: built Pilot UI + FastAPI on port **8000**, with
+**SQLite on a Fly volume** at ``/app/data/greenmachine.db`` so your vault survives deploys and restarts.
+
+**Cost:** Fly bills for the VM + volume (see https://fly.io/docs/about/pricing/ ). There is no separate
+“market data” fee in this stack; you still upload CSVs or call ``/ingest/eod``.
+
+Prerequisites
+---------------
+  - Install the Fly CLI: https://fly.io/docs/hands-on/install-flyctl/
+  - Log in: ``fly auth login``
+  - Credit card on file with Fly (their requirement for most accounts).
+
+1) Pick an app name and region
+-------------------------------
+  - Edit **fly.toml** at the repo root: set ``app = "your-unique-name"`` (globally unique on Fly).
+  - Set ``primary_region`` to a region near you (``iad`` US East, ``ord`` Chicago, ``dfw`` Dallas, etc.).
+  - The **volume** must be created in the **same** region (step 2).
+
+2) Create the data volume (once per app)
+-----------------------------------------
+  From the repo root (match region to ``primary_region``):
+
+    fly volumes create greenmachine_data --region iad --size 1
+
+  Name ``greenmachine_data`` must match ``[mounts] source`` in **fly.toml**.
+
+3) Create the app (if you have not already)
+---------------------------------------------
+    fly apps create your-unique-name
+
+  Or ``fly launch --no-deploy`` once and merge our **fly.toml** fields if Fly generates a different file.
+
+4) Set secrets (examples)
+---------------------------
+    fly secrets set GM_COCKPIT_PASSWORD="your-long-secret"
+    fly secrets set GM_COCKPIT_USER="green"
+
+  If you use **Vercel** for Pilot only, allow that origin:
+
+    fly secrets set GM_CORS_ORIGINS="https://your-app.vercel.app"
+
+  If you only open the **built cockpit** on Fly (same origin), CORS defaults may be enough — still set
+  ``GM_COCKPIT_PASSWORD`` so random visitors cannot use your API.
+
+  Optional LLM:
+
+    fly secrets set OPENAI_API_KEY="sk-..."
+
+5) Deploy
+---------
+    fly deploy
+
+  When it finishes, open ``https://your-unique-name.fly.dev/`` (Fly prints the URL). Sign in with Basic
+  auth if you set ``GM_COCKPIT_PASSWORD``.
+
+6) Point your phone / EOD agent at the cloud
+---------------------------------------------
+  - **Phone:** bookmark ``https://your-unique-name.fly.dev/`` (same user/password as Basic auth).
+  - **Scheduled upload from home PC:** set env ``GREEN_MACHINE_ENGINE=https://your-unique-name.fly.dev``
+    and the same ``GM_COCKPIT_USER`` / ``GM_COCKPIT_PASSWORD`` when running
+    ``historian/scripts/eod_upload_agent.py`` or ``windows_task_eod_schedule.ps1``.
+
+Postgres instead of SQLite (optional, later)
+---------------------------------------------
+  Set ``GM_DATABASE_URL`` to a hosted Postgres (Neon, Supabase, RDS) via ``fly secrets set``, then apply
+  ``historian/sql/*.sql`` on that database so ``spy_daily`` and friends exist. You can remove the
+  ``[mounts]`` block if the DB is fully remote. This path is more ops work than SQLite-on-volume.
+
+Troubleshooting
+---------------
+  - **502 / machine not listening:** check ``fly logs``; confirm ``internal_port = 8000`` matches uvicorn.
+  - **Volume errors on first deploy:** create the volume in the same region as ``primary_region``.
+  - **Health check fails:** ``/health`` must return 200 without auth — the cockpit gate exempts ``/health``.

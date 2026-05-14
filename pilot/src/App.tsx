@@ -17,6 +17,35 @@ type SimilarDay = {
   distance: number;
 };
 
+type LiveEvent = {
+  t: string;
+  kind: string;
+  text?: string;
+  file?: string;
+  bytes?: number;
+  ingest_kind?: string;
+  path?: string;
+  error?: string;
+  stderr?: string;
+  code?: number;
+};
+
+function formatLiveLine(e: LiveEvent): string {
+  const ts = e.t?.slice(11, 19) ?? "??:??:??";
+  switch (e.kind) {
+    case "note":
+      return `${ts}  NOTE  ${e.text ?? ""}`;
+    case "ingest_queued":
+      return `${ts}  UPLOAD  ${e.file ?? "?"} · ${e.ingest_kind ?? "?"} (${((e.bytes ?? 0) / 1024).toFixed(1)} KB)`;
+    case "ingest_done":
+      return `${ts}  DONE  ${e.ingest_kind ?? "?"} ingested`;
+    case "ingest_error":
+      return `${ts}  ERR  ${e.ingest_kind ?? "?"} — ${(e.error ?? e.stderr ?? "failed").toString().slice(0, 120)}`;
+    default:
+      return `${ts}  ${e.kind}`;
+  }
+}
+
 type BacktestResponse = {
   equity_curve: EquityPoint[];
   sharpe: number | null;
@@ -111,8 +140,12 @@ function ChartPane({ data }: { data: EquityPoint[] }) {
 }
 
 export default function App() {
-  const [snapshot, setSnapshot] = useState({ spy: "—", vix: "—" });
+  const [snapshot, setSnapshot] = useState({ spy: "—", vix: "—", asOf: "—" });
   const [pulse, setPulse] = useState(true);
+  const [liveEvents, setLiveEvents] = useState<LiveEvent[]>([]);
+  const [deskNote, setDeskNote] = useState("");
+  const [uploadKind, setUploadKind] = useState<"tos_daily" | "options">("tos_daily");
+  const [uploadBusy, setUploadBusy] = useState(false);
   const [equity, setEquity] = useState<EquityPoint[]>([]);
   const [stats, setStats] = useState<BacktestResponse | null>(null);
   const [sidebar, setSidebar] = useState(
@@ -173,13 +206,83 @@ export default function App() {
         if (!h.ok) return;
         const m = await fetch(engineUrl("/market/snapshot"));
         if (!m.ok) return;
-        const j = (await m.json()) as { spy: number; vix: number };
-        setSnapshot({ spy: j.spy.toFixed(2), vix: j.vix.toFixed(2) });
+        const j = (await m.json()) as { spy: number | null; vix: number | null; as_of?: string | null };
+        setSnapshot({
+          spy: j.spy != null ? j.spy.toFixed(2) : "—",
+          vix: j.vix != null ? j.vix.toFixed(2) : "—",
+          asOf: j.as_of ?? "—",
+        });
       } catch {
         /* cockpit still usable offline */
       }
     })();
   }, []);
+
+  useEffect(() => {
+    const url = engineUrl("/live/stream");
+    const es = new EventSource(url);
+    es.onmessage = (ev) => {
+      try {
+        const j = JSON.parse(ev.data) as {
+          snapshot?: { spy: number | null; vix: number | null; as_of?: string | null };
+          events?: LiveEvent[];
+        };
+        if (j.snapshot) {
+          setSnapshot({
+            spy: j.snapshot.spy != null ? Number(j.snapshot.spy).toFixed(2) : "—",
+            vix: j.snapshot.vix != null ? Number(j.snapshot.vix).toFixed(2) : "—",
+            asOf:
+              j.snapshot.as_of != null && j.snapshot.as_of !== ""
+                ? String(j.snapshot.as_of).slice(0, 10)
+                : "—",
+          });
+        }
+        if (j.events?.length) setLiveEvents(j.events);
+      } catch {
+        /* ignore malformed SSE frames */
+      }
+    };
+    return () => es.close();
+  }, []);
+
+  const postDeskNote = useCallback(async () => {
+    const t = deskNote.trim();
+    if (!t) return;
+    try {
+      const res = await fetch(engineUrl("/live/note"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: t }),
+      });
+      if (res.ok) setDeskNote("");
+    } catch {
+      /* offline */
+    }
+  }, [deskNote]);
+
+  const onUploadCsv = useCallback(
+    async (fileList: FileList | null) => {
+      const f = fileList?.[0];
+      if (!f) return;
+      setUploadBusy(true);
+      try {
+        const fd = new FormData();
+        fd.append("file", f);
+        const res = await fetch(engineUrl(`/ingest/eod?kind=${uploadKind}`), {
+          method: "POST",
+          body: fd,
+        });
+        if (!res.ok) {
+          setSidebar((s) => s + `\n*upload* HTTP ${res.status}\n`);
+        }
+      } catch {
+        setSidebar((s) => s + "\n*upload* network error — is the Engine up?\n");
+      } finally {
+        setUploadBusy(false);
+      }
+    },
+    [uploadKind],
+  );
 
   const metrics = useMemo(() => {
     if (!stats) return "—";
@@ -200,12 +303,15 @@ export default function App() {
         style={{ borderColor: "rgba(57,255,20,0.15)", background: PANEL }}
       >
         <div className="font-mono text-xs tracking-[0.35em] text-[#39FF14]">GREEN MACHINE</div>
-        <div className="flex gap-8 font-mono text-sm text-[#F8F8FF]">
+        <div className="flex flex-wrap items-center gap-x-8 gap-y-1 font-mono text-sm text-[#F8F8FF]">
           <span>
             SPY <span className="text-[#39FF14]">{snapshot.spy}</span>
           </span>
           <span>
             VIX <span className="text-[#39FF14]">{snapshot.vix}</span>
+          </span>
+          <span className="text-[11px] text-[#F8F8FF]/45" title="Last bar in vault (EOD CSV)">
+            TAPE <span className="text-[#F8F8FF]/70">{snapshot.asOf}</span>
           </span>
           <span className="flex items-center gap-2">
             <span
@@ -220,7 +326,7 @@ export default function App() {
         </div>
       </header>
 
-      <div className="grid flex-1 grid-cols-1 gap-0 lg:grid-cols-[1fr_280px]">
+      <div className="grid flex-1 grid-cols-1 gap-0 lg:grid-cols-[1fr_340px]">
         <main className="flex flex-col border-r border-[rgba(57,255,20,0.08)]">
           <div className="border-b border-[rgba(57,255,20,0.08)] px-4 py-2 font-mono text-[11px] text-[#F8F8FF]/70">
             CUMULATIVE PnL · {metrics}
@@ -231,15 +337,72 @@ export default function App() {
         </main>
 
         <aside
-          className="max-h-[40vh] overflow-auto border-t border-[rgba(57,255,20,0.08)] p-4 font-mono text-[12px] leading-relaxed text-[#F8F8FF]/90 lg:max-h-none lg:border-t-0"
+          className="flex max-h-[55vh] flex-col overflow-hidden border-t border-[rgba(57,255,20,0.08)] lg:max-h-none lg:border-t-0"
           style={{ background: PANEL }}
         >
-          <div className="mb-2 text-[10px] tracking-widest text-[#39FF14]/80">LLM · STRATEGY</div>
-          <div className="prose prose-invert max-w-none prose-headings:text-[#39FF14] prose-a:text-[#39FF14]">
-            {/* lightweight markdown-ish: we render pre-wrapped content */}
-            <pre className="whitespace-pre-wrap font-mono text-[11px] text-[#F8F8FF]/85">
-              {sidebar}
-            </pre>
+          <div className="shrink-0 border-b border-[rgba(57,255,20,0.12)] p-3 font-mono text-[11px]">
+            <div className="mb-2 text-[10px] tracking-[0.35em] text-[#39FF14]/85">LIVE DESK</div>
+            <div className="mb-2 max-h-[140px] space-y-0.5 overflow-y-auto text-[#F8F8FF]/75">
+              {liveEvents.length === 0 ? (
+                <div className="text-[#F8F8FF]/35">Waiting for feed…</div>
+              ) : (
+                [...liveEvents].reverse().map((e, i) => (
+                  <div key={`${e.t}-${i}`} className="whitespace-pre-wrap break-words">
+                    {formatLiveLine(e)}
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="flex gap-1">
+              <input
+                className="min-w-0 flex-1 border border-[rgba(57,255,20,0.2)] bg-black/40 px-2 py-1 text-[#F8F8FF] outline-none placeholder:text-[#F8F8FF]/25"
+                placeholder="Trade / desk note"
+                value={deskNote}
+                onChange={(e) => setDeskNote(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void postDeskNote();
+                }}
+              />
+              <button
+                type="button"
+                className="shrink-0 border border-[rgba(57,255,20,0.35)] px-2 py-1 text-[#39FF14] hover:bg-[rgba(57,255,20,0.08)]"
+                onClick={() => void postDeskNote()}
+              >
+                SEND
+              </button>
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-[rgba(57,255,20,0.08)] pt-2">
+              <label className="text-[#F8F8FF]/50">EOD CSV</label>
+              <select
+                className="border border-[rgba(57,255,20,0.2)] bg-black/40 px-1 py-0.5 text-[#F8F8FF]"
+                value={uploadKind}
+                onChange={(e) => setUploadKind(e.target.value as "tos_daily" | "options")}
+              >
+                <option value="tos_daily">TOS daily (SPY OHLCV)</option>
+                <option value="options">Options chain (normalized)</option>
+              </select>
+              <label className="cursor-pointer border border-[rgba(57,255,20,0.35)] px-2 py-0.5 text-[#39FF14] hover:bg-[rgba(57,255,20,0.08)]">
+                {uploadBusy ? "…" : "Choose file"}
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  className="hidden"
+                  disabled={uploadBusy}
+                  onChange={(e) => {
+                    void onUploadCsv(e.target.files);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+            </div>
+          </div>
+          <div className="min-h-0 flex-1 overflow-auto p-4 font-mono text-[12px] leading-relaxed text-[#F8F8FF]/90">
+            <div className="mb-2 text-[10px] tracking-widest text-[#39FF14]/80">LLM · STRATEGY</div>
+            <div className="prose prose-invert max-w-none prose-headings:text-[#39FF14] prose-a:text-[#39FF14]">
+              <pre className="whitespace-pre-wrap font-mono text-[11px] text-[#F8F8FF]/85">
+                {sidebar}
+              </pre>
+            </div>
           </div>
         </aside>
       </div>

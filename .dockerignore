@@ -1,0 +1,16 @@
+.git
+.cursor
+**/.venv
+**/node_modules
+**/__pycache__
+*.pyc
+.pytest_cache
+.mypy_cache
+.ruff_cache
+pilot/node_modules
+pilot/dist
+engine/.venv
+engine/static/cockpit
+*.db
+*.db-journal
+!data/.gitkeep

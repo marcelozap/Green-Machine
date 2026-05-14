@@ -1,7 +1,7 @@
 /**
  * Production (Vercel): set VITE_ENGINE_URL to your reachable Engine base, e.g.
  *   https://xxxx.ngrok-free.app
- * Dev: leave unset — Vite proxy forwards /health, /backtest, /market to localhost:8000.
+ * Dev: leave unset — Vite proxy forwards /health, /backtest, /market, /live, /ingest, /nexus, /auth, /integrations to localhost:8000.
  */
 export function engineUrl(path: string): string {
   const raw = import.meta.env.VITE_ENGINE_URL as string | undefined;

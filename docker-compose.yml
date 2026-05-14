@@ -12,5 +12,28 @@ services:
       - green_machine_pgdata:/var/lib/postgresql/data
       - ./historian/sql:/docker-entrypoint-initdb.d:ro
 
+  nexus_db:
+    image: postgres:16-alpine
+    container_name: nexus-engine-db
+    environment:
+      POSTGRES_USER: nexus
+      POSTGRES_PASSWORD: nexus
+      POSTGRES_DB: nexus
+    ports:
+      - "5433:5432"
+    volumes:
+      - nexus_pgdata:/var/lib/postgresql/data
+
+  web:
+    build: .
+    image: green-machine-web
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      GM_CORS_ORIGINS: ""
+
 volumes:
   green_machine_pgdata:
+  nexus_pgdata:

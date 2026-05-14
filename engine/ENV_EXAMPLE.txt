@@ -3,6 +3,14 @@
 # Use Postgres/Timescale instead of local SQLite:
 # GM_DATABASE_URL=postgresql+asyncpg://USER:PASS@127.0.0.1:5432/greenmachine
 
+# Optional — Nexus / XIV (same FastAPI app on port 8000; same DB as GM_DATABASE_URL):
+# GM_NEXUS_VOLATILITY_LOW_BELOW=0.35
+# XIV_VOICE_PASSPHRASE=   (or GM_XIV_VOICE_PASSPHRASE)
+
+# Phone / internet: require browser login (HTTP Basic Auth) when exposing Engine via tunnel:
+# GM_COCKPIT_USER=green
+# GM_COCKPIT_PASSWORD=choose-a-long-random-secret
+
 # Optional LLM keys (otherwise keyword heuristics are used):
 # OPENAI_API_KEY=
 # ANTHROPIC_API_KEY=

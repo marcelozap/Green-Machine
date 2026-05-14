@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Monorepo root: engine/app/config.py -> parents[2] == repository root
@@ -33,6 +33,34 @@ class Settings(BaseSettings):
 
     # Comma-separated browser origins (e.g. https://your-app.vercel.app) for CORS.
     cors_origins: str = ""
+
+    # Nexus (XIV life domains) — same DB as GM_DATABASE_URL (SQLite or Postgres).
+    nexus_volatility_low_below: float = Field(
+        default=0.35,
+        description="State-switcher: volatility_score below this ⇒ 'boring tape' if no 6/6 signal.",
+    )
+    xiv_voice_passphrase: str = Field(
+        default="",
+        description="POST /auth/voice-pass. Env: GM_XIV_VOICE_PASSPHRASE or XIV_VOICE_PASSPHRASE.",
+    )
+
+    @model_validator(mode="after")
+    def _xiv_passphrase_fallback(self) -> "Settings":
+        import os
+
+        if self.xiv_voice_passphrase.strip():
+            return self
+        alt = os.getenv("XIV_VOICE_PASSPHRASE", "").strip()
+        if alt:
+            object.__setattr__(self, "xiv_voice_passphrase", alt)
+        return self
+
+    # Phone / tunnel: set GM_COCKPIT_PASSWORD to require HTTP Basic Auth on the whole app.
+    cockpit_user: str = Field(default="green", description="Basic auth username (default green).")
+    cockpit_password: str = Field(
+        default="",
+        description="If non-empty, browser must send Basic auth (use with HTTPS tunnel).",
+    )
 
 
 settings = Settings()
