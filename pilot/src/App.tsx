@@ -58,6 +58,7 @@ type SessionBudget = {
   session_over_budget: boolean;
   zero_dte_pct: number;
   zero_dte_pnl: number;
+  recent_sessions: { session_date: string; net_pnl: number }[];
 };
 
 function formatLiveLine(e: LiveEvent): string {
@@ -204,6 +205,7 @@ export default function App() {
   const [tradeToast, setTradeToast] = useState(false);
   const [deskTimeline, setDeskTimeline] = useState<DeskLogItem[]>([]);
   const [micActive, setMicActive] = useState(false);
+  const [cooldownPlan, setCooldownPlan] = useState("");
   const recognitionRef = useRef<{ stop: () => void } | null>(null);
 
   const loadDeskTimeline = useCallback(async () => {
@@ -222,21 +224,27 @@ export default function App() {
     void loadDeskTimeline();
   }, [loadDeskTimeline]);
 
+  const needsCooldown = budget.available && budget.session_over_budget;
+
   const postDeskTrade = useCallback(async () => {
     const sym = tradeSymbol.trim().toUpperCase();
     const line = tradeLine.trim();
     if (!sym || !line) return;
+    if (needsCooldown && cooldownPlan.trim().length < 10) return;
     setTradeBusy(true);
     try {
       const tags = tradeOpen ? ["open"] : ["closed"];
+      const plan = cooldownPlan.trim();
+      const description = plan ? `[PLAN: ${plan}] ${line}` : line;
       const res = await fetch(engineUrl("/desk/trade"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ symbol: sym, description: line, tags }),
+        body: JSON.stringify({ symbol: sym, description, tags }),
       });
       if (res.ok) {
         setTradeSymbol("");
         setTradeLine("");
+        setCooldownPlan("");
         setTradeOpen(true);
         void loadDeskTimeline();
         setTradeToast(true);
@@ -247,7 +255,17 @@ export default function App() {
     } finally {
       setTradeBusy(false);
     }
-  }, [tradeSymbol, tradeLine, tradeOpen, loadDeskTimeline]);
+  }, [tradeSymbol, tradeLine, tradeOpen, cooldownPlan, needsCooldown, loadDeskTimeline]);
+
+  const loadDeskContext = useCallback(async () => {
+    try {
+      const res = await fetch(engineUrl("/desk/context-preview"));
+      if (res.ok) {
+        const j = (await res.json()) as { text: string; count: number };
+        setSidebar((s) => s + `\n--- DESK CONTEXT (${j.count} entries) ---\n${j.text || "(empty)"}\n`);
+      }
+    } catch { /* offline */ }
+  }, []);
 
   const toggleMic = useCallback(() => {
     if (micActive) {
@@ -467,39 +485,49 @@ export default function App() {
             {/* ── Session budget rail ── */}
             {budget.available && (() => {
               const s = budget.last_session;
-              const pnlStr = (s.pnl >= 0 ? "+" : "") + "$" + Math.abs(s.pnl).toFixed(0);
-              const ytdStr = (budget.total_realized_pnl >= 0 ? "+" : "−") + "$" + Math.abs(budget.total_realized_pnl).toFixed(0);
-              const zeroStr = (budget.zero_dte_pct * 100).toFixed(0) + "%";
-              const isRed = s.pnl < 0;
+              const fmt = (n: number) => (n >= 0 ? "+" : "−") + "$" + Math.abs(n).toFixed(0);
               const overBudget = budget.session_over_budget;
               return (
                 <div
-                  className={`mb-2 flex flex-wrap gap-x-3 gap-y-0.5 border px-2 py-1 text-[9px] leading-snug ${
+                  className={`mb-2 border px-2 py-1 text-[9px] leading-snug ${
                     overBudget
                       ? "border-red-800/60 bg-red-950/30"
                       : "border-[rgba(57,255,20,0.12)] bg-black/20"
                   }`}
-                  title={`Budget: −$${budget.daily_budget_usd.toFixed(0)} · 0DTE P&L: −$${Math.abs(budget.zero_dte_pnl).toFixed(0)}`}
+                  title={`Budget: −$${budget.daily_budget_usd.toFixed(0)} · 0DTE total P&L: ${fmt(budget.zero_dte_pnl)}`}
                 >
-                  <span className="text-[#F8F8FF]/45">{s.is_today ? "TODAY" : `TAPE ${s.date.slice(5)}`}</span>
-                  <span className={isRed ? "text-red-400" : "text-[#39FF14]"}>{pnlStr}</span>
-                  <span className="text-[#F8F8FF]/35">·</span>
-                  <span className="text-[#F8F8FF]/45">YTD</span>
-                  <span className={budget.total_realized_pnl < 0 ? "text-red-400/80" : "text-[#39FF14]/80"}>{ytdStr}</span>
-                  <span className="text-[#F8F8FF]/35">·</span>
-                  <span className="text-[#F8F8FF]/45">0DTE</span>
-                  <span className={budget.zero_dte_pct > 0.7 ? "text-amber-400" : "text-[#F8F8FF]/60"}>{zeroStr}{budget.zero_dte_pct > 0.7 ? " ⚠" : ""}</span>
-                  {overBudget && budget.headroom_usd != null && (
-                    <>
-                      <span className="text-[#F8F8FF]/35">·</span>
+                  {/* main row */}
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                    <span className="text-[#F8F8FF]/45">{s.is_today ? "TODAY" : `TAPE ${s.date.slice(5)}`}</span>
+                    <span className={s.pnl < 0 ? "text-red-400" : "text-[#39FF14]"}>{fmt(s.pnl)}</span>
+                    <span className="text-[#F8F8FF]/35">·</span>
+                    <span className="text-[#F8F8FF]/45">YTD</span>
+                    <span className={budget.total_realized_pnl < 0 ? "text-red-400/80" : "text-[#39FF14]/80"}>{fmt(budget.total_realized_pnl)}</span>
+                    <span className="text-[#F8F8FF]/35">·</span>
+                    <span className="text-[#F8F8FF]/45">0DTE</span>
+                    <span className={budget.zero_dte_pct > 0.7 ? "text-amber-400" : "text-[#F8F8FF]/60"}>
+                      {(budget.zero_dte_pct * 100).toFixed(0)}%{budget.zero_dte_pct > 0.7 ? " ⚠" : ""}
+                    </span>
+                    {overBudget && budget.headroom_usd != null && (
                       <span className="font-bold text-red-400">OVER ${Math.abs(budget.headroom_usd).toFixed(0)}</span>
-                    </>
-                  )}
-                  {!overBudget && budget.headroom_usd != null && (
-                    <>
-                      <span className="text-[#F8F8FF]/35">·</span>
+                    )}
+                    {!overBudget && budget.headroom_usd != null && (
                       <span className="text-[#39FF14]/60">room ${budget.headroom_usd.toFixed(0)}</span>
-                    </>
+                    )}
+                  </div>
+                  {/* recent sessions spark row */}
+                  {budget.recent_sessions.length > 0 && (
+                    <div className="mt-0.5 flex gap-2 border-t border-[rgba(255,255,255,0.05)] pt-0.5">
+                      {budget.recent_sessions.map((r) => (
+                        <span
+                          key={r.session_date}
+                          className={`text-[8px] ${r.net_pnl < 0 ? "text-red-400/70" : "text-[#39FF14]/60"}`}
+                          title={r.session_date}
+                        >
+                          {r.net_pnl >= 0 ? "+" : "−"}{Math.abs(r.net_pnl).toFixed(0)}
+                        </span>
+                      ))}
+                    </div>
                   )}
                 </div>
               );
@@ -557,10 +585,26 @@ export default function App() {
                 </button>
               </div>
 
+              {/* Cooldown gate — visible when session is over budget */}
+              {needsCooldown && (
+                <div className="mb-1.5 border border-red-800/50 bg-red-950/25 px-2 py-1">
+                  <div className="mb-1 text-[8px] text-red-400">
+                    Session OVER budget. Write a one-line plan to unlock trade logging.
+                  </div>
+                  <textarea
+                    className="w-full resize-none border border-red-800/40 bg-black/40 px-2 py-1 text-[10px] text-[#F8F8FF] outline-none placeholder:text-[#F8F8FF]/25"
+                    placeholder="Why this trade? What's the edge? (10 chars min)"
+                    rows={2}
+                    value={cooldownPlan}
+                    onChange={(e) => setCooldownPlan(e.target.value)}
+                  />
+                </div>
+              )}
+
               {/* LOG TRADE */}
               <button
                 type="button"
-                disabled={tradeBusy || !tradeSymbol.trim() || !tradeLine.trim()}
+                disabled={tradeBusy || !tradeSymbol.trim() || !tradeLine.trim() || (needsCooldown && cooldownPlan.trim().length < 10)}
                 className="w-full border border-[rgba(57,255,20,0.45)] py-1 text-center text-[10px] tracking-widest text-[#39FF14] hover:bg-[rgba(57,255,20,0.08)] disabled:cursor-not-allowed disabled:opacity-35"
                 onClick={() => void postDeskTrade()}
               >
@@ -583,15 +627,21 @@ export default function App() {
                 deskTimeline.map((item) => {
                   const ts = item.ts?.slice(11, 16) ?? "";
                   const isTrade = item.kind === "trade";
+                  const isOpen = item.tags?.includes("open");
+                  const isClosed = item.tags?.includes("closed");
                   return (
                     <div key={item.id} className="flex items-baseline gap-1.5 break-words leading-snug">
-                      <span
-                        className={`shrink-0 text-[9px] font-bold tracking-wide ${isTrade ? "text-[#39FF14]" : "text-[#F8F8FF]/40"}`}
-                      >
-                        {isTrade ? `TRADE` : "NOTE"}
+                      <span className={`shrink-0 text-[9px] font-bold tracking-wide ${isTrade ? "text-[#39FF14]" : "text-[#F8F8FF]/40"}`}>
+                        {isTrade ? "TRADE" : "NOTE"}
                       </span>
                       {isTrade && item.symbol && (
                         <span className="shrink-0 text-[9px] text-[#39FF14]/70">{item.symbol}</span>
+                      )}
+                      {isTrade && isOpen && (
+                        <span className="shrink-0 border border-[#39FF14]/40 px-0.5 text-[8px] text-[#39FF14]/80">OPEN</span>
+                      )}
+                      {isTrade && isClosed && (
+                        <span className="shrink-0 border border-[#F8F8FF]/15 px-0.5 text-[8px] text-[#F8F8FF]/30">CLOS</span>
                       )}
                       <span className="flex-1 truncate text-[#F8F8FF]/65">
                         {isTrade ? (item.description ?? "") : (item.text ?? "")}
@@ -665,7 +715,17 @@ export default function App() {
 
           {/* ── LLM / Strategy section ── */}
           <div className="min-h-0 flex-1 overflow-auto p-4 font-mono text-[12px] leading-relaxed text-[#F8F8FF]/90">
-            <div className="mb-2 text-[10px] tracking-widest text-[#39FF14]/80">LLM · STRATEGY</div>
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-[10px] tracking-widest text-[#39FF14]/80">LLM · STRATEGY</span>
+              <button
+                type="button"
+                className="border border-[rgba(57,255,20,0.25)] px-1.5 py-0.5 text-[9px] text-[#39FF14]/60 hover:border-[#39FF14]/60 hover:text-[#39FF14]"
+                title="Load what coach sees into strategy pane"
+                onClick={() => void loadDeskContext()}
+              >
+                DESK CONTEXT
+              </button>
+            </div>
             <div className="prose prose-invert max-w-none prose-headings:text-[#39FF14] prose-a:text-[#39FF14]">
               <pre className="whitespace-pre-wrap font-mono text-[11px] text-[#F8F8FF]/85">
                 {sidebar}
