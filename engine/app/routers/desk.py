@@ -10,7 +10,9 @@ from pathlib import Path
 from fastapi import APIRouter, Query
 from starlette.concurrency import run_in_threadpool
 
+from app.config import settings
 from app.schemas import DeskLogItemOut, DeskNoteBody, DeskTradeBody
+from app.services.realized_rollup import load_session_budget
 
 router = APIRouter(prefix="/desk", tags=["desk"])
 
@@ -121,3 +123,12 @@ async def get_day(session_date: str) -> list:
 @router.get("/context-preview")
 async def get_context_preview() -> dict:
     return await run_in_threadpool(_do_context_preview)
+
+
+@router.get("/session-budget")
+async def get_session_budget() -> dict:
+    return await run_in_threadpool(
+        load_session_budget,
+        settings.realized_analysis_path,
+        settings.daily_loss_budget_usd,
+    )

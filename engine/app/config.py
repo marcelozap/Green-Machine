@@ -55,6 +55,17 @@ class Settings(BaseSettings):
             object.__setattr__(self, "xiv_voice_passphrase", alt)
         return self
 
+    # Risk rail: path to realized_analysis.json rollup (absolute, or relative to repo root).
+    realized_analysis_path: str = Field(
+        default="data/realized_analysis.json",
+        description="Env: GM_REALIZED_ANALYSIS_PATH. Absolute path or relative to repo root.",
+    )
+    # Daily hard-stop in USD (positive number = max loss before cockpit warns OVER).
+    daily_loss_budget_usd: float = Field(
+        default=500.0,
+        description="Env: GM_DAILY_LOSS_BUDGET. Session P&L below negative this triggers OVER.",
+    )
+
     # Phone / tunnel: set GM_COCKPIT_PASSWORD to require HTTP Basic Auth on the whole app.
     cockpit_user: str = Field(default="green", description="Basic auth username (default green).")
     cockpit_password: str = Field(

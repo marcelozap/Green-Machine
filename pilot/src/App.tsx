@@ -41,6 +41,25 @@ type DeskLogItem = {
   text?: string | null;
 };
 
+type SessionBudget = {
+  available: false;
+} | {
+  available: true;
+  last_session: {
+    date: string;
+    pnl: number;
+    lots: number;
+    cum_pnl: number;
+    is_today: boolean;
+  };
+  total_realized_pnl: number;
+  daily_budget_usd: number;
+  headroom_usd: number | null;
+  session_over_budget: boolean;
+  zero_dte_pct: number;
+  zero_dte_pnl: number;
+};
+
 function formatLiveLine(e: LiveEvent): string {
   const ts = e.t?.slice(11, 19) ?? "??:??:??";
   switch (e.kind) {
@@ -164,6 +183,18 @@ export default function App() {
   );
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [cmd, setCmd] = useState("");
+
+  // Session budget rail
+  const [budget, setBudget] = useState<SessionBudget>({ available: false });
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch(engineUrl("/desk/session-budget"));
+        if (res.ok) setBudget((await res.json()) as SessionBudget);
+      } catch { /* offline */ }
+    })();
+  }, []);
 
   // Trade logging state
   const [tradeSymbol, setTradeSymbol] = useState("");
@@ -432,6 +463,47 @@ export default function App() {
         >
           <div className="shrink-0 overflow-y-auto border-b border-[rgba(57,255,20,0.12)] p-3 font-mono text-[11px]">
             <div className="mb-2 text-[10px] tracking-[0.35em] text-[#39FF14]/85">LIVE DESK</div>
+
+            {/* ── Session budget rail ── */}
+            {budget.available && (() => {
+              const s = budget.last_session;
+              const pnlStr = (s.pnl >= 0 ? "+" : "") + "$" + Math.abs(s.pnl).toFixed(0);
+              const ytdStr = (budget.total_realized_pnl >= 0 ? "+" : "−") + "$" + Math.abs(budget.total_realized_pnl).toFixed(0);
+              const zeroStr = (budget.zero_dte_pct * 100).toFixed(0) + "%";
+              const isRed = s.pnl < 0;
+              const overBudget = budget.session_over_budget;
+              return (
+                <div
+                  className={`mb-2 flex flex-wrap gap-x-3 gap-y-0.5 border px-2 py-1 text-[9px] leading-snug ${
+                    overBudget
+                      ? "border-red-800/60 bg-red-950/30"
+                      : "border-[rgba(57,255,20,0.12)] bg-black/20"
+                  }`}
+                  title={`Budget: −$${budget.daily_budget_usd.toFixed(0)} · 0DTE P&L: −$${Math.abs(budget.zero_dte_pnl).toFixed(0)}`}
+                >
+                  <span className="text-[#F8F8FF]/45">{s.is_today ? "TODAY" : `TAPE ${s.date.slice(5)}`}</span>
+                  <span className={isRed ? "text-red-400" : "text-[#39FF14]"}>{pnlStr}</span>
+                  <span className="text-[#F8F8FF]/35">·</span>
+                  <span className="text-[#F8F8FF]/45">YTD</span>
+                  <span className={budget.total_realized_pnl < 0 ? "text-red-400/80" : "text-[#39FF14]/80"}>{ytdStr}</span>
+                  <span className="text-[#F8F8FF]/35">·</span>
+                  <span className="text-[#F8F8FF]/45">0DTE</span>
+                  <span className={budget.zero_dte_pct > 0.7 ? "text-amber-400" : "text-[#F8F8FF]/60"}>{zeroStr}{budget.zero_dte_pct > 0.7 ? " ⚠" : ""}</span>
+                  {overBudget && budget.headroom_usd != null && (
+                    <>
+                      <span className="text-[#F8F8FF]/35">·</span>
+                      <span className="font-bold text-red-400">OVER ${Math.abs(budget.headroom_usd).toFixed(0)}</span>
+                    </>
+                  )}
+                  {!overBudget && budget.headroom_usd != null && (
+                    <>
+                      <span className="text-[#F8F8FF]/35">·</span>
+                      <span className="text-[#39FF14]/60">room ${budget.headroom_usd.toFixed(0)}</span>
+                    </>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* ── "I'M IN THIS" trade entry strip ── */}
             <div className="mb-3 border border-[rgba(57,255,20,0.2)] p-2">
