@@ -12,6 +12,7 @@ from app.db_init import init_db_schema
 from app.nexus.models import NexusBase
 from app.routers import (
     backtest,
+    desk,
     health,
     ingest_upload,
     live,
@@ -51,6 +52,7 @@ app.add_middleware(
 app.add_middleware(CockpitBasicAuthMiddleware)
 
 app.include_router(backtest.router)
+app.include_router(desk.router)
 app.include_router(health.router)
 app.include_router(live.router)
 app.include_router(ingest_upload.router)

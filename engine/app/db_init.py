@@ -56,6 +56,20 @@ SQLITE_DDL = [
     """,
     "CREATE INDEX IF NOT EXISTS idx_spy_daily_td ON spy_daily (trade_date)",
     "CREATE INDEX IF NOT EXISTS idx_opts_ts ON spy_options_history (ts)",
+    """
+    CREATE TABLE IF NOT EXISTS desk_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ts TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        symbol TEXT,
+        description TEXT,
+        tags TEXT,
+        session_date TEXT,
+        text TEXT
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_desk_log_ts ON desk_log (ts)",
+    "CREATE INDEX IF NOT EXISTS idx_desk_log_sd ON desk_log (session_date)",
 ]
 
 

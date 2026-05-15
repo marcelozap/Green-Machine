@@ -102,3 +102,25 @@ class LiveNoteBody(BaseModel):
     """Quick desk note pushed to the live feed (e.g. after a trade)."""
 
     text: str = Field(..., min_length=1, max_length=800)
+
+
+class DeskNoteBody(BaseModel):
+    text: str = Field(..., min_length=1, max_length=800)
+
+
+class DeskTradeBody(BaseModel):
+    symbol: str = Field(..., min_length=1, max_length=20)
+    description: str = Field(..., min_length=1, max_length=800)
+    tags: list[str] = Field(default_factory=list)
+    session_date: str | None = Field(default=None, description="YYYY-MM-DD; defaults to UTC today.")
+
+
+class DeskLogItemOut(BaseModel):
+    id: int
+    ts: str
+    kind: str
+    symbol: str | None = None
+    description: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    session_date: str | None = None
+    text: str | None = None

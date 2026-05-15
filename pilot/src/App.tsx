@@ -30,6 +30,17 @@ type LiveEvent = {
   code?: number;
 };
 
+type DeskLogItem = {
+  id: number;
+  ts: string;
+  kind: "note" | "trade";
+  symbol?: string | null;
+  description?: string | null;
+  tags?: string[];
+  session_date?: string | null;
+  text?: string | null;
+};
+
 function formatLiveLine(e: LiveEvent): string {
   const ts = e.t?.slice(11, 19) ?? "??:??:??";
   switch (e.kind) {
@@ -153,6 +164,84 @@ export default function App() {
   );
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [cmd, setCmd] = useState("");
+
+  // Trade logging state
+  const [tradeSymbol, setTradeSymbol] = useState("");
+  const [tradeLine, setTradeLine] = useState("");
+  const [tradeOpen, setTradeOpen] = useState(true);
+  const [tradeBusy, setTradeBusy] = useState(false);
+  const [tradeToast, setTradeToast] = useState(false);
+  const [deskTimeline, setDeskTimeline] = useState<DeskLogItem[]>([]);
+  const [micActive, setMicActive] = useState(false);
+  const recognitionRef = useRef<{ stop: () => void } | null>(null);
+
+  const loadDeskTimeline = useCallback(async () => {
+    try {
+      const res = await fetch(engineUrl("/desk/timeline?limit=40"));
+      if (res.ok) {
+        const j = (await res.json()) as DeskLogItem[];
+        setDeskTimeline(j);
+      }
+    } catch {
+      /* offline */
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadDeskTimeline();
+  }, [loadDeskTimeline]);
+
+  const postDeskTrade = useCallback(async () => {
+    const sym = tradeSymbol.trim().toUpperCase();
+    const line = tradeLine.trim();
+    if (!sym || !line) return;
+    setTradeBusy(true);
+    try {
+      const tags = tradeOpen ? ["open"] : ["closed"];
+      const res = await fetch(engineUrl("/desk/trade"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ symbol: sym, description: line, tags }),
+      });
+      if (res.ok) {
+        setTradeSymbol("");
+        setTradeLine("");
+        setTradeOpen(true);
+        void loadDeskTimeline();
+        setTradeToast(true);
+        setTimeout(() => setTradeToast(false), 4000);
+      }
+    } catch {
+      /* offline */
+    } finally {
+      setTradeBusy(false);
+    }
+  }, [tradeSymbol, tradeLine, tradeOpen, loadDeskTimeline]);
+
+  const toggleMic = useCallback(() => {
+    if (micActive) {
+      recognitionRef.current?.stop();
+      setMicActive(false);
+      return;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const SR = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
+    if (!SR) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const r = new SR() as any;
+    r.continuous = false;
+    r.interimResults = false;
+    r.onresult = (ev: { results: { [k: number]: { [k: number]: { transcript: string } } } }) => {
+      const t = ev.results[0]?.[0]?.transcript ?? "";
+      setTradeLine((prev) => (prev ? `${prev} ${t}` : t));
+      setMicActive(false);
+    };
+    r.onerror = () => setMicActive(false);
+    r.onend = () => setMicActive(false);
+    recognitionRef.current = r as { stop: () => void };
+    r.start();
+    setMicActive(true);
+  }, [micActive]);
 
   const runBacktest = useCallback(async (prompt: string) => {
     setSidebar((s) => s + `\n> ${prompt}\n`);
@@ -336,27 +425,130 @@ export default function App() {
           </div>
         </main>
 
+        {/* ── LIVE DESK ── */}
         <aside
           className="flex max-h-[55vh] flex-col overflow-hidden border-t border-[rgba(57,255,20,0.08)] lg:max-h-none lg:border-t-0"
           style={{ background: PANEL }}
         >
-          <div className="shrink-0 border-b border-[rgba(57,255,20,0.12)] p-3 font-mono text-[11px]">
+          <div className="shrink-0 overflow-y-auto border-b border-[rgba(57,255,20,0.12)] p-3 font-mono text-[11px]">
             <div className="mb-2 text-[10px] tracking-[0.35em] text-[#39FF14]/85">LIVE DESK</div>
-            <div className="mb-2 max-h-[140px] space-y-0.5 overflow-y-auto text-[#F8F8FF]/75">
+
+            {/* ── "I'M IN THIS" trade entry strip ── */}
+            <div className="mb-3 border border-[rgba(57,255,20,0.2)] p-2">
+              <div className="mb-1.5 text-[9px] tracking-[0.3em] text-[#39FF14]/55">
+                I'M IN THIS
+              </div>
+
+              {/* Symbol row */}
+              <div className="mb-1.5 flex items-center gap-2">
+                <input
+                  className="w-20 shrink-0 border border-[rgba(57,255,20,0.25)] bg-black/40 px-2 py-1 font-mono uppercase text-[#F8F8FF] outline-none placeholder:text-[#F8F8FF]/25"
+                  placeholder="SYMB"
+                  value={tradeSymbol}
+                  maxLength={10}
+                  onChange={(e) => setTradeSymbol(e.target.value.toUpperCase())}
+                />
+                <label className="flex cursor-pointer items-center gap-1.5 text-[10px] text-[#F8F8FF]/55 select-none">
+                  <input
+                    type="checkbox"
+                    checked={tradeOpen}
+                    onChange={(e) => setTradeOpen(e.target.checked)}
+                    className="accent-[#39FF14]"
+                  />
+                  Still open
+                </label>
+              </div>
+
+              {/* Position line + MIC */}
+              <div className="mb-1.5 flex gap-1">
+                <textarea
+                  className="min-h-[44px] flex-1 resize-none border border-[rgba(57,255,20,0.2)] bg-black/40 px-2 py-1 text-[#F8F8FF] outline-none placeholder:text-[#F8F8FF]/25"
+                  placeholder={"e.g. STO 6× SPY 740p @1.05 · stopped −40%"}
+                  rows={2}
+                  value={tradeLine}
+                  onChange={(e) => setTradeLine(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void postDeskTrade();
+                  }}
+                />
+                <button
+                  type="button"
+                  title="Dictate position line"
+                  className={`shrink-0 self-start border px-2 py-1 text-[10px] transition-colors ${
+                    micActive
+                      ? "border-[#39FF14] text-[#39FF14] shadow-[0_0_8px_rgba(57,255,20,0.4)]"
+                      : "border-[rgba(57,255,20,0.25)] text-[#F8F8FF]/50 hover:border-[#39FF14] hover:text-[#39FF14]"
+                  }`}
+                  onClick={toggleMic}
+                >
+                  {micActive ? "●" : "MIC"}
+                </button>
+              </div>
+
+              {/* LOG TRADE */}
+              <button
+                type="button"
+                disabled={tradeBusy || !tradeSymbol.trim() || !tradeLine.trim()}
+                className="w-full border border-[rgba(57,255,20,0.45)] py-1 text-center text-[10px] tracking-widest text-[#39FF14] hover:bg-[rgba(57,255,20,0.08)] disabled:cursor-not-allowed disabled:opacity-35"
+                onClick={() => void postDeskTrade()}
+              >
+                {tradeBusy ? "LOGGING…" : "LOG TRADE"}
+              </button>
+
+              {/* Toast — C: coach linkage hint */}
+              {tradeToast && (
+                <div className="mt-1.5 text-[9px] text-[#39FF14]/70">
+                  Desk updated — coach will see this on next briefing refresh.
+                </div>
+              )}
+            </div>
+
+            {/* ── Desk timeline (trades + notes) ── */}
+            <div className="mb-2 max-h-[200px] space-y-px overflow-y-auto">
+              {deskTimeline.length === 0 ? (
+                <div className="text-[#F8F8FF]/30">No desk entries yet.</div>
+              ) : (
+                deskTimeline.map((item) => {
+                  const ts = item.ts?.slice(11, 16) ?? "";
+                  const isTrade = item.kind === "trade";
+                  return (
+                    <div key={item.id} className="flex items-baseline gap-1.5 break-words leading-snug">
+                      <span
+                        className={`shrink-0 text-[9px] font-bold tracking-wide ${isTrade ? "text-[#39FF14]" : "text-[#F8F8FF]/40"}`}
+                      >
+                        {isTrade ? `TRADE` : "NOTE"}
+                      </span>
+                      {isTrade && item.symbol && (
+                        <span className="shrink-0 text-[9px] text-[#39FF14]/70">{item.symbol}</span>
+                      )}
+                      <span className="flex-1 truncate text-[#F8F8FF]/65">
+                        {isTrade ? (item.description ?? "") : (item.text ?? "")}
+                      </span>
+                      <span className="shrink-0 text-[9px] text-[#F8F8FF]/30">{ts}</span>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* ── Ingest event feed (SSE) — upload + note events ── */}
+            <div className="mb-2 max-h-[80px] space-y-0.5 overflow-y-auto border-t border-[rgba(57,255,20,0.06)] pt-1.5">
               {liveEvents.length === 0 ? (
-                <div className="text-[#F8F8FF]/35">Waiting for feed…</div>
+                <div className="text-[#F8F8FF]/25">Waiting for feed…</div>
               ) : (
                 [...liveEvents].reverse().map((e, i) => (
-                  <div key={`${e.t}-${i}`} className="whitespace-pre-wrap break-words">
+                  <div key={`${e.t}-${i}`} className="whitespace-pre-wrap break-words text-[#F8F8FF]/55">
                     {formatLiveLine(e)}
                   </div>
                 ))
               )}
             </div>
+
+            {/* ── Quick note ── */}
             <div className="flex gap-1">
               <input
                 className="min-w-0 flex-1 border border-[rgba(57,255,20,0.2)] bg-black/40 px-2 py-1 text-[#F8F8FF] outline-none placeholder:text-[#F8F8FF]/25"
-                placeholder="Trade / desk note"
+                placeholder="Quick note"
                 value={deskNote}
                 onChange={(e) => setDeskNote(e.target.value)}
                 onKeyDown={(e) => {
@@ -368,9 +560,11 @@ export default function App() {
                 className="shrink-0 border border-[rgba(57,255,20,0.35)] px-2 py-1 text-[#39FF14] hover:bg-[rgba(57,255,20,0.08)]"
                 onClick={() => void postDeskNote()}
               >
-                SEND
+                NOTE
               </button>
             </div>
+
+            {/* ── EOD upload ── */}
             <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-[rgba(57,255,20,0.08)] pt-2">
               <label className="text-[#F8F8FF]/50">EOD CSV</label>
               <select
@@ -396,6 +590,8 @@ export default function App() {
               </label>
             </div>
           </div>
+
+          {/* ── LLM / Strategy section ── */}
           <div className="min-h-0 flex-1 overflow-auto p-4 font-mono text-[12px] leading-relaxed text-[#F8F8FF]/90">
             <div className="mb-2 text-[10px] tracking-widest text-[#39FF14]/80">LLM · STRATEGY</div>
             <div className="prose prose-invert max-w-none prose-headings:text-[#39FF14] prose-a:text-[#39FF14]">
@@ -457,6 +653,10 @@ export default function App() {
         >
           ⌘K COMMAND LINE — BACKTEST / LLM
         </button>
+        {/* B — Nexus discipline hint */}
+        <div className="mt-0.5 text-[#F8F8FF]/28 italic">
+          Tools don't replace discipline — logging exposure lets coach/brain match reality.
+        </div>
       </footer>
     </div>
   );
