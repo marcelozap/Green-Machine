@@ -71,6 +71,6 @@ async def api_meta() -> dict[str, str]:
     }
 
 
-_COCKPIT = Path(__file__).resolve().parent / "static" / "cockpit"
+_COCKPIT = Path(__file__).resolve().parents[1] / "static" / "cockpit"
 if _COCKPIT.is_dir() and any(_COCKPIT.iterdir()):
     app.mount("/", StaticFiles(directory=str(_COCKPIT), html=True), name="cockpit")
